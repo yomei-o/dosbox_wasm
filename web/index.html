@@ -52,8 +52,8 @@ main {
 }
 #screen-wrap { background: #000; border: 1px solid var(--line); border-radius: 4px; line-height: 0; }
 canvas {
-	/* No aspect-ratio: DOSBox-X sizes the canvas itself (the DOS mode plus its
-	   own menu bar), so let the intrinsic ratio stand. */
+	/* 640x480 doubled. Safe to scale in CSS because the mouse is captured, so
+	   DOSBox-X works in relative motion and never maps a client coordinate. */
 	display: block;
 	width: 1280px;
 	max-width: calc(100vw - 44px);
@@ -159,9 +159,15 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<strong>ファイルを入れる</strong> で手元の図面を持ち込めます。
 		</p>
 
+		<h2>マウス</h2>
+		<p>
+			<strong>画面を一度クリックするとマウスを掴みます。</strong>掴んでいる間だけ
+			JW_CAD のカーソルがホストのマウスに追従します。<kbd>Ctrl</kbd>+<kbd>F10</kbd> で解放。
+		</p>
+
 		<h2>キー操作</h2>
 		<table>
-			<tr><td><kbd>Ctrl</kbd>+<kbd>F10</kbd></td><td>マウスキャプチャの切り替え</td></tr>
+			<tr><td><kbd>Ctrl</kbd>+<kbd>F10</kbd></td><td>マウスの掴み／解放</td></tr>
 			<tr><td><kbd>Alt</kbd></td><td>JW_CAD の <kbd>GRPH</kbd></td></tr>
 			<tr><td><kbd>End</kbd></td><td>JW_CAD の <kbd>HELP</kbd></td></tr>
 			<tr><td><kbd>Home</kbd></td><td>JW_CAD の <kbd>HOME/CLR</kbd></td></tr>
