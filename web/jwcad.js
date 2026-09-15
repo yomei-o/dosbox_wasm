@@ -18,12 +18,26 @@ const WXPDOSV_LZH = '../third_party/wxpdosv4.lzh';
 const WORK = '/work';
 const JWCAD_DIR = WORK + '/JWCAD';
 const WXP_DIR = WORK + '/WXP';
-const STAMP = WORK + '/.installed';
+const STAMP = WORK + '/INSTALL.VER';
 // Bump when the contents of third_party/ change, to reinstall over an old C:.
 const INSTALL_VERSION = 'jwcv222h+wxpdosv4-1';
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
+
+// ?trace=1 mirrors DOSBox-X's log to the web server's access log through a
+// synchronous XHR. Console logging is useless when the emulator wedges the
+// main thread, because a blocked renderer never delivers the messages; a sync
+// XHR still goes out. See tools/README.md.
+const TRACE = new URLSearchParams(location.search).has('trace');
+function trace(s) {
+	if (!TRACE) return;
+	try {
+		const x = new XMLHttpRequest();
+		x.open('GET', '/LOG/' + encodeURIComponent(String(s)).slice(0, 300), false);
+		x.send(null);
+	} catch { /* the trace is best effort */ }
+}
 
 function setStatus(text, isError) {
 	statusEl.textContent = text;
@@ -217,8 +231,8 @@ function boot() {
 		canvas,
 		arguments: ['-conf', '/dosbox-x.conf'],
 		noInitialRun: false,
-		print: (t) => console.log(t),
-		printErr: (t) => console.warn(t),
+		print: (t) => { console.log(t); trace('out|' + t); },
+		printErr: (t) => { console.warn(t); trace('err|' + t); },
 		preRun: [function () {
 			FS = Module.FS;
 			Module.addRunDependency('jwcad-install');
@@ -242,6 +256,7 @@ function boot() {
 				}
 			})();
 		}],
+		onAbort: (w) => { trace('ABORT|' + w); setStatus('異常終了しました: ' + w, true); },
 		onRuntimeInitialized: () => setStatus('実行中 — 画面をクリックしてから操作してください'),
 	};
 	window.Module = Module;
