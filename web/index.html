@@ -117,6 +117,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 		<input type="file" id="fep-file" multiple accept=".lzh">
 		<span id="fep-state" class="off">未導入</span>
 	</span>
+	<button id="fep-key" disabled title="右Altを送ってFEPを起動／終了します">かな漢字 ON/OFF</button>
 	<button id="restart">再起動</button>
 	<button id="save">保存</button>
 </header>
@@ -166,7 +167,13 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<strong>wxpdosv</strong> を使います。WXP は再配布条件（転載は要許可）のため同梱していません。
 			<code>wxpj31.lzh</code> を入手して、上の <strong>FEP</strong> 欄に放り込んでください。
 			一度入れればブラウザに保存され、以後は自動で組み込まれます。
-			起動後 <kbd>Alt</kbd>+<kbd>`</kbd>（半角/全角）で FEP が立ち上がります。
+		</p>
+		<p>
+			切替は <strong>右 <kbd>Alt</kbd></strong> です（<code>WXPDOSV.EXE -a</code> で常駐させています）。
+			JW_CAD は左 <kbd>Alt</kbd> を <kbd>GRPH</kbd> として使うので、右だけを FEP に割り当てています。
+			ブラウザや OS に <kbd>Alt</kbd> を横取りされる環境では、上の
+			<strong>かな漢字 ON/OFF</strong> ボタンを使ってください。キーイベントを
+			エミュレータへ直接送るので確実に届きます。
 		</p>
 
 		<h2>これは何か</h2>
