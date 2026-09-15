@@ -272,12 +272,31 @@ function boot() {
 		onAbort: (w) => { trace('ABORT|' + w); setStatus('異常終了しました: ' + w, true); },
 		onRuntimeInitialized: () => {
 			canvas.focus();
-			setStatus('実行中 — 画面をクリックするとマウスを掴みます（Ctrl+F10 で解放）');
+			setStatus('実行中 — 画面をクリックでマウスを掴み、Esc で解放。' +
+				'日本語は上の欄へ（Ctrl+Shift+Space でいつでも戻れます）');
 		},
 	};
 	window.Module = Module;
 
 	canvas.addEventListener('pointerdown', () => canvas.focus());
+
+	// Clicking the screen hands the pointer to the emulator, and while it is
+	// held there is no way to reach anything else on the page - including the
+	// Japanese input field, which is the whole point of it. Esc is the
+	// browser's own way out and cannot be suppressed; Ctrl+Shift+Space is a
+	// second route that also puts the caret straight in the field.
+	document.addEventListener('pointerlockchange', () => {
+		const locked = document.pointerLockElement === canvas;
+		$('locked').textContent = locked ? 'マウスを掴んでいます — Esc で解放' : '';
+		if (!locked) $('ime').focus();
+	});
+
+	window.addEventListener('keydown', (ev) => {
+		if (!ev.ctrlKey || !ev.shiftKey || ev.code !== 'Space') return;
+		ev.preventDefault();
+		if (document.pointerLockElement) document.exitPointerLock();
+		$('ime').focus();
+	}, true);
 
 	const s = document.createElement('script');
 	s.src = 'dosbox-x.js';

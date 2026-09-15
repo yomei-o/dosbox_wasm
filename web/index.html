@@ -80,6 +80,7 @@ canvas {
 	padding: 5px 10px;
 }
 #ime-bar input:focus { border-color: var(--accent); outline: none; }
+#locked { color: #ffcf6a; font-size: 13px; }
 #status { min-height: 1.6em; color: var(--dim); font-variant-numeric: tabular-nums; }
 #status.err { color: #ff8a8a; }
 .panel {
@@ -152,6 +153,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 	<label for="ime">日本語入力</label>
 	<input type="text" id="ime" placeholder="ここに入力して Enter（ブラウザの IME が使えます）" autocomplete="off">
 	<button id="ime-send">送る</button>
+	<span id="locked"></span>
 </div>
 
 <main>
@@ -184,10 +186,17 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<strong>ファイルを入れる</strong> で手元の図面を持ち込めます。
 		</p>
 
-		<h2>マウス</h2>
+		<h2>マウス — 掴む／解放</h2>
 		<p>
 			<strong>画面を一度クリックするとマウスを掴みます。</strong>掴んでいる間だけ
-			JW_CAD のカーソルがホストのマウスに追従します。<kbd>Ctrl</kbd>+<kbd>F10</kbd> で解放。
+			JW_CAD のカーソルがマウスに追従します。掴んでいる間はページ上の他の場所を
+			クリックできないので、<strong><kbd>Esc</kbd> で解放</strong>してください。
+			<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> なら解放と同時に
+			日本語入力欄にカーソルが入ります。
+		</p>
+		<p>
+			掴んでいない状態ではカーソルが合いません。これは DOSBox-X が
+			キャプチャ前提で相対移動を送るためで、現在の既知の問題です。
 		</p>
 
 		<h2>キー操作</h2>
