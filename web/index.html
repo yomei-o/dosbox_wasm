@@ -117,7 +117,14 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 		<input type="file" id="fep-file" multiple accept=".lzh">
 		<span id="fep-state" class="off">未導入</span>
 	</span>
-	<button id="fep-key" disabled title="右Altを送ってFEPを起動／終了します">かな漢字 ON/OFF</button>
+	<button id="fep-key" disabled title="選んだキーをエミュレータへ直接送ります">かな漢字 ON/OFF</button>
+	<select id="fep-trigger" disabled title="FEP の起動キー">
+		<option value="AltRight">右 Alt</option>
+		<option value="Backquote">半角/全角 (`)</option>
+		<option value="AltLeft+Backquote">Alt + `</option>
+		<option value="ControlLeft+Space">Ctrl + Space</option>
+		<option value="ShiftLeft+Space">Shift + Space</option>
+	</select>
 	<button id="restart">再起動</button>
 	<button id="save">保存</button>
 </header>
@@ -169,11 +176,18 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			一度入れればブラウザに保存され、以後は自動で組み込まれます。
 		</p>
 		<p>
-			切替は <strong>右 <kbd>Alt</kbd></strong> です（<code>WXPDOSV.EXE -a</code> で常駐させています）。
-			JW_CAD は左 <kbd>Alt</kbd> を <kbd>GRPH</kbd> として使うので、右だけを FEP に割り当てています。
-			ブラウザや OS に <kbd>Alt</kbd> を横取りされる環境では、上の
-			<strong>かな漢字 ON/OFF</strong> ボタンを使ってください。キーイベントを
-			エミュレータへ直接送るので確実に届きます。
+			WXP は <code>CONFIG.SYS</code> 相当の <code>[devices]</code> から読み込まれ、起動時に
+			<code>日本語フロントプロセッサ ＷＸＰ</code> のバナーが出れば常駐しています。
+			<code>wxpdosv</code> は<strong>使っていません</strong> — DOSBox-X の DOS/V
+			エミュレーションが、あの TSR がやっていた J-3100 固有 BIOS コールの肩代わりを
+			すでに済ませており、併用するとゲストがリセットします。
+		</p>
+		<p>
+			FEP の起動キーは環境によって変わるので、上の <strong>かな漢字 ON/OFF</strong> の
+			横で選べるようにしてあります。ボタンはそのキーをエミュレータへ直接送るので、
+			ブラウザや OS に <kbd>Alt</kbd> を横取りされる環境でも確実に届きます。
+			効くものが見つかったらキーボードから直接押しても構いません。
+			なお JW_CAD は左 <kbd>Alt</kbd> を <kbd>GRPH</kbd> として使うので、そこは避けてください。
 		</p>
 
 		<h2>これは何か</h2>

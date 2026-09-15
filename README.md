@@ -37,22 +37,48 @@ fepcontrol=both          # $IAS と MS-KANJI、両方の FEP 制御 API
 
 ## 日本語入力 (FEP)
 
-エー・アイ・ソフトのフリー FEP **WXP for J-3100** と、それを DOS/V 上で動かす TSR
-**wxpdosv** を使います。wxpdosv は同梱していますが、**WXP 本体は再配布条件により
+エー・アイ・ソフトのフリー FEP **WXP for J-3100** を使います。**WXP 本体は再配布条件により
 同梱できません**（[third_party/NOTICE.md](third_party/NOTICE.md) 参照）。
 
 1. `wxpj31.lzh` を入手する
 2. ページ上部の **FEP** 欄に放り込む（ブラウザ内に保存されます）
 3. **再起動**
 
-以後は `CONFIG.SYS` 相当の `[devices]` に
+以後は `CONFIG.SYS` 相当の `[devices]` から読み込まれます。
 
-```
+```ini
+[devices]
+RUN=MOUNT C /work
 DEVICE=C:\WXP\WXP.SYS /R /Z /H30 /CS /D1C:\WXP\JISHO01.DIC /D3C:\WXP\JISHO02.DIC
 DEVICE=C:\WXP\WXDP.SYS
 ```
 
-が入り、起動時に `WXPDOSV.EXE` が常駐します。<kbd>Alt</kbd>+<kbd>`</kbd> で FEP が立ち上がります。
+`RUN=MOUNT C` が要るのは、このセクションが `[autoexec]` **より前**に走るからです。
+`mount` を `[autoexec]` に書くと、`DEVICE=` の時点で `C:` がまだ存在せず、WXP は
+黙って読み込まれません。
+
+### wxpdosv は使っていません
+
+WXP は J-3100 用なので、本来は DOS/V 機で動かすのに
+[wxpdosv](https://www.vector.co.jp/soft/dos/writing/se105856.html)
+という TSR で J-3100 固有の BIOS コールを埋める必要がありました。
+DOSBox-X ではこれが**不要どころか有害**です。
+
+| 構成 | 結果 |
+|---|---|
+| WXP のみ | 起動バナーが出て常駐。`MEM /C` が 32K → **158K** |
+| WXP + wxpdosv | WXP が辞書を読み終えた直後、ゲストがリセットベクタ (`F000:FFF0`) へ飛ぶ |
+
+DOSBox-X の DOS/V エミュレーションが、あの TSR のやっていた仕事をすでに
+済ませているためです。書庫自体は `third_party/` に残してあります
+（アセンブリソース付きで、当時どの BIOS コールを埋めていたかの資料になります）。
+
+### 起動キー
+
+FEP を呼び出すキーは環境で変わるので、ページ上部で選べるようにしてあります。
+**かな漢字 ON/OFF** ボタンがそのキーをエミュレータへ直接送るので、ブラウザや OS に
+<kbd>Alt</kbd> を横取りされる環境でも届きます。JW_CAD は左 <kbd>Alt</kbd> を
+<kbd>GRPH</kbd> として使うので、そこは避けてください。
 
 ## ビルド
 
