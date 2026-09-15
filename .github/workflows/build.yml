@@ -1,0 +1,57 @@
+name: Rebuild wasm
+
+# Not on push: DOSBox-X takes ~25 minutes to build and the artifacts are
+# committed. Run this by hand when you want to pick up upstream changes, then
+# download the artifact and commit it (or let the job open the PR for you).
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: which module to build
+        type: choice
+        default: all
+        options: [all, dosbox, lzh]
+      commit:
+        description: commit the result back to this branch
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential autoconf automake libtool m4 pkg-config
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.57
+
+      - name: Build
+        run: scripts/build-wasm.sh "${{ inputs.target }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: |
+            web/dosbox-x.js
+            web/dosbox-x.wasm
+            web/lzh.js
+            web/lzh.wasm
+
+      - name: Commit
+        if: ${{ inputs.commit }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add web/dosbox-x.js web/dosbox-x.wasm web/lzh.js web/lzh.wasm
+          git diff --cached --quiet && { echo "no change"; exit 0; }
+          git commit -m "Rebuild wasm (${{ inputs.target }})"
+          git push

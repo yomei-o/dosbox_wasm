@@ -1,0 +1,5 @@
+.build/
+node_modules/
+*.log
+# WXP is deliberately not distributed here; see third_party/NOTICE.md
+third_party/wxpj31.lzh

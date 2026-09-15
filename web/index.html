@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JW_CAD DOS/V on DOSBox-X wasm</title>
+<style>
+:root {
+	--bg: #14161a;
+	--panel: #1c1f26;
+	--line: #2b303b;
+	--fg: #e6e8ec;
+	--dim: #9aa3b2;
+	--accent: #7cc4ff;
+}
+* { box-sizing: border-box; }
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+header {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 18px;
+	align-items: center;
+	padding: 12px 20px;
+	background: var(--panel);
+	border-bottom: 1px solid var(--line);
+}
+h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+h1 span { color: var(--dim); font-weight: 400; }
+label { color: var(--dim); }
+select, button, input[type=file] {
+	font: inherit;
+	color: var(--fg);
+	background: #262b34;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 5px 10px;
+}
+button { cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+main {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 14px;
+	padding: 20px;
+}
+#screen-wrap { background: #000; border: 1px solid var(--line); border-radius: 4px; line-height: 0; }
+canvas {
+	display: block;
+	width: 1280px;
+	max-width: calc(100vw - 44px);
+	aspect-ratio: 4 / 3;
+	image-rendering: pixelated;
+	outline: none;
+}
+#status { min-height: 1.6em; color: var(--dim); font-variant-numeric: tabular-nums; }
+#status.err { color: #ff8a8a; }
+.panel {
+	width: 100%;
+	max-width: 900px;
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 10px 14px;
+}
+.panel-head { color: var(--dim); margin-bottom: 8px; }
+.panel-head span { font-size: 12px; }
+.bar { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.bar .path { font: 13px/1.5 ui-monospace, monospace; color: var(--accent); }
+table { width: 100%; border-collapse: collapse; }
+td { padding: 3px 8px 3px 0; }
+td.name { font: 13px/1.5 ui-monospace, monospace; word-break: break-all; }
+td.name a { color: var(--accent); text-decoration: none; cursor: pointer; }
+td.size { color: var(--dim); text-align: right; white-space: nowrap; }
+td.actions { white-space: nowrap; text-align: right; }
+td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
+.notes { max-width: 900px; color: var(--dim); font-size: 13px; }
+.notes h2 { font-size: 13px; color: var(--fg); margin: 18px 0 6px; }
+.notes table { border-collapse: collapse; }
+.notes td { padding: 1px 14px 1px 0; vertical-align: top; }
+.notes kbd {
+	background: #262b34;
+	border: 1px solid var(--line);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	padding: 0 5px;
+	font: 12px/1.5 ui-monospace, monospace;
+	color: var(--fg);
+}
+.notes a { color: var(--accent); }
+.notes code { color: var(--fg); }
+#fep-state.on { color: #8ce99a; }
+#fep-state.off { color: var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+	<h1>JW_CAD <span>DOS/V — DOSBox-X wasm</span></h1>
+	<span>
+		<label for="vmode">画面</label>
+		<select id="vmode">
+			<option value="-V12">640×480 (-V12)</option>
+			<option value="-V6a">800×600 (-V6a)</option>
+		</select>
+	</span>
+	<span>
+		<label for="fep-file">FEP</label>
+		<input type="file" id="fep-file" multiple accept=".lzh">
+		<span id="fep-state" class="off">未導入</span>
+	</span>
+	<button id="restart">再起動</button>
+	<button id="save">保存</button>
+</header>
+
+<main>
+	<div id="screen-wrap"><canvas id="canvas" tabindex="0" width="640" height="480"></canvas></div>
+	<div id="status">起動しています…</div>
+
+	<div class="panel">
+		<div class="panel-head">
+			ファイル <span>— <code>C:</code> ドライブの中身。図面の出し入れはここから</span>
+		</div>
+		<div class="bar">
+			<button id="fs-up" disabled>上へ</button>
+			<span id="fs-path" class="path">C:\</span>
+		</div>
+		<table id="fs-table"></table>
+		<div class="bar">
+			<button id="fs-add">ファイルを入れる</button>
+			<button id="fs-mkdir">新規フォルダ</button>
+			<input type="file" id="fs-file" multiple hidden>
+		</div>
+		<div id="fs-note" class="panel-head"></div>
+	</div>
+
+	<div class="notes">
+		<h2>使いかた</h2>
+		<p>
+			起動すると <code>C:\JWCAD\JW_CADV.EXE</code> が立ち上がります。
+			図面は <code>C:</code> ドライブ（ブラウザの IndexedDB）に保存され、リロードしても残ります。
+			上の一覧から <strong>取り出す</strong> で <code>.JWC</code> を手元にダウンロードでき、
+			<strong>ファイルを入れる</strong> で手元の図面を持ち込めます。
+		</p>
+
+		<h2>キー操作</h2>
+		<table>
+			<tr><td><kbd>Ctrl</kbd>+<kbd>F10</kbd></td><td>マウスキャプチャの切り替え</td></tr>
+			<tr><td><kbd>Alt</kbd></td><td>JW_CAD の <kbd>GRPH</kbd></td></tr>
+			<tr><td><kbd>End</kbd></td><td>JW_CAD の <kbd>HELP</kbd></td></tr>
+			<tr><td><kbd>Home</kbd></td><td>JW_CAD の <kbd>HOME/CLR</kbd></td></tr>
+		</table>
+
+		<h2>日本語入力（FEP）</h2>
+		<p id="fep-help">
+			文字入力に日本語を使うには FEP が要ります。エー・アイ・ソフトのフリー FEP
+			<strong>WXP for J-3100</strong> と、それを DOS/V で動かす TSR
+			<strong>wxpdosv</strong> を使います。WXP は再配布条件（転載は要許可）のため同梱していません。
+			<code>wxpj31.lzh</code> を入手して、上の <strong>FEP</strong> 欄に放り込んでください。
+			一度入れればブラウザに保存され、以後は自動で組み込まれます。
+			起動後 <kbd>Alt</kbd>+<kbd>`</kbd>（半角/全角）で FEP が立ち上がります。
+		</p>
+
+		<h2>これは何か</h2>
+		<p>
+			<a href="https://github.com/joncampbell123/dosbox-x">DOSBox-X</a> を WebAssembly に
+			ビルドし、DOS/V エミュレーション（<code>dosv=jp</code>）を有効にしたものです。
+			JW_CAD の DOS/V 版は VGA 640×480 のグラフィックス画面に直接描画し、
+			漢字は DOS/V のフォント API 経由で取得します。DOSBox-X は内蔵フォントで
+			これを賄うので、実機の DOS/V は要りません。
+		</p>
+		<p>
+			JW_CAD 本体は配布条件に従い、配布書庫 <code>jwcv222h.lzh</code> を無改変のまま同梱し、
+			ブラウザ側で展開しています。同梱物と出典は
+			<a href="https://github.com/yomei-o/dosbox_wasm/blob/main/third_party/NOTICE.md">NOTICE.md</a> を見てください。
+		</p>
+	</div>
+</main>
+
+<script type="module" src="jwcad.js"></script>
+
+</body>
+</html>

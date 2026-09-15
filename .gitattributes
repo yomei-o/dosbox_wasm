@@ -1,0 +1,5 @@
+# Keep LF in the tree; the shell scripts are run from WSL and CI.
+* text=auto eol=lf
+*.lzh binary
+*.wasm binary
+*.png binary

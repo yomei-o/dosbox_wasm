@@ -1,0 +1,37 @@
+Skip SDL joystick and CD-ROM initialisation under Emscripten.
+
+SDL_InitSubSystem(SDL_INIT_JOYSTICK) never returns in the browser: startup
+stops dead right after DOSBox-X logs "Initializing SDL joystick subsystem...",
+and no further log line is ever produced (confirmed by tracing startup through
+synchronous XHR, which keeps working even while the renderer is blocked).
+
+Neither subsystem is useful in a browser build, so skip both.
+
+--- a/src/gui/sdlmain.cpp
++++ b/src/gui/sdlmain.cpp
+@@
+         /* -- -- Initialise Joystick and CD-ROM separately. This way we can warn when it fails instead of exiting the application */
+         LOG(LOG_MISC,LOG_DEBUG)("Initializing SDL joystick subsystem...");
+         glide.fullscreen = &sdl.desktop.fullscreen;
++#if C_EMSCRIPTEN
++        /* SDL_InitSubSystem(SDL_INIT_JOYSTICK) hangs the browser tab, and
++         * neither joysticks nor CD-ROM are reachable from wasm anyway. */
++        sdl.num_joysticks = 0;
++#else
+         if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) >= 0) {
+             sdl.num_joysticks = (Bitu)SDL_NumJoysticks();
+             LOG(LOG_MISC,LOG_DEBUG)("SDL reports %u joysticks",(unsigned int)sdl.num_joysticks);
+         }
+         else {
+             LOG(LOG_GUI,LOG_WARN)("Failed to init joystick support");
+             sdl.num_joysticks = 0;
+         }
+ 
+ #if defined(C_SDL2)
+         if (SDL_CDROMInit() < 0) {
+ #else
+         if (SDL_InitSubSystem(SDL_INIT_CDROM) < 0) {
+ #endif
+             LOG(LOG_GUI,LOG_WARN)("Failed to init CD-ROM support");
+         }
++#endif

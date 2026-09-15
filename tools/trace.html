@@ -1,0 +1,25 @@
+<!doctype html><meta charset=utf-8><title>probe5</title>
+<canvas id=canvas width=640 height=480></canvas>
+<script>
+// A blocked renderer cannot deliver console messages, but a synchronous XHR
+// still reaches the server, so the access log becomes the trace.
+function slog(s) {
+  try {
+    const x = new XMLHttpRequest();
+    x.open('GET', '/LOG/' + encodeURIComponent(String(s)).slice(0, 300), false);
+    x.send(null);
+  } catch (e) {}
+}
+window.onerror = (m) => slog('ONERROR ' + m);
+slog('script-start');
+var Module = {
+  canvas: document.getElementById('canvas'),
+  arguments: [],
+  print: (t) => slog('out|' + t),
+  printErr: (t) => slog('err|' + t),
+  preRun: [function () { slog('preRun'); }],
+  onRuntimeInitialized: function () { slog('runtime-initialized'); },
+  onAbort: (w) => slog('ABORT|' + w),
+};
+</script>
+<script src="../web/dosbox-x.js" onload="slog('dosbox-js-loaded')"></script>
