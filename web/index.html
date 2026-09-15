@@ -61,6 +61,25 @@ canvas {
 	image-rendering: pixelated;
 	outline: none;
 }
+#ime-bar {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 8px 20px;
+	background: var(--panel);
+	border-bottom: 1px solid var(--line);
+}
+#ime-bar input {
+	flex: 1;
+	max-width: 520px;
+	font: inherit;
+	color: var(--fg);
+	background: #262b34;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 5px 10px;
+}
+#ime-bar input:focus { border-color: var(--accent); outline: none; }
 #status { min-height: 1.6em; color: var(--dim); font-variant-numeric: tabular-nums; }
 #status.err { color: #ff8a8a; }
 .panel {
@@ -129,6 +148,12 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 	<button id="save">保存</button>
 </header>
 
+<div id="ime-bar">
+	<label for="ime">日本語入力</label>
+	<input type="text" id="ime" placeholder="ここに入力して Enter（ブラウザの IME が使えます）" autocomplete="off">
+	<button id="ime-send">送る</button>
+</div>
+
 <main>
 	<div id="screen-wrap"><canvas id="canvas" tabindex="0" width="640" height="480"></canvas></div>
 	<div id="status">起動しています…</div>
@@ -173,7 +198,22 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<tr><td><kbd>Home</kbd></td><td>JW_CAD の <kbd>HOME/CLR</kbd></td></tr>
 		</table>
 
-		<h2>日本語入力（FEP）</h2>
+		<h2>日本語入力</h2>
+		<p>
+			画面上部の <strong>日本語入力</strong> 欄に、<strong>ブラウザの IME でそのまま</strong>
+			打ち込んで <kbd>Enter</kbd> を押してください。確定した文字列が Shift_JIS に変換され、
+			JW_CAD のキーボードバッファへ直接送られます。DOS の FEP は要りません。
+			JW_CAD 側で文字入力の状態（<code>文字</code> コマンドなど）にしてから送ってください。
+		</p>
+		<p>
+			DOSBox-X はもともと、ホストの IME で打った文字をゲストのコードページに変換して
+			キーボードバッファへ積む経路を持っています（FEP が変換確定文字を渡すのと同じ仕組み）。
+			ただしその処理は Windows / X11 / macOS 用の <code>#if</code> の中にあり、
+			Emscripten ビルドでは丸ごと消えています。そこで最後の一段だけを
+			<code>dosbox_x_type_bytes</code> として外に出し、ページから呼んでいます。
+		</p>
+
+		<h2>DOS の FEP を使う場合（任意）</h2>
 		<p id="fep-help">
 			文字入力に日本語を使うには FEP が要ります。エー・アイ・ソフトのフリー FEP
 			<strong>WXP for J-3100</strong> と、それを DOS/V で動かす TSR

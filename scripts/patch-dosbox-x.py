@@ -44,9 +44,41 @@ CDROM_NEW = """#if !C_EMSCRIPTEN
 """ + CDROM_OLD + """#endif
 """
 
+# DOSBox-X already knows how to deliver text typed with a host IME: its
+# SDL_TEXTINPUT handler encodes the text to the guest code page and pushes the
+# bytes into the BIOS keyboard buffer, which is exactly how a DOS FEP hands
+# over a converted string. That whole handler is behind a #if for Win32/X11/
+# macOS, so the Emscripten build has no way in at all.
+#
+# Rather than try to make Emscripten's SDL2 produce SDL_TEXTINPUT with IME
+# composition, expose the last step directly and let the page drive it. The
+# page can then offer a plain text field, let the browser's own IME do the
+# conversion, and send the result here.
+TYPE_ANCHOR = """#if C_EMSCRIPTEN
+# include <emscripten.h>
+#endif
+"""
+
+TYPE_NEW = TYPE_ANCHOR + """
+#if C_EMSCRIPTEN
+/* Push bytes that are already in the guest code page (Shift_JIS under
+ * dosv=jp) into the BIOS keyboard buffer. Returns how many were accepted; the
+ * buffer is small, so the caller is expected to send the rest later. */
+extern "C" EMSCRIPTEN_KEEPALIVE int dosbox_x_type_bytes(const unsigned char *s, int len) {
+    int n = 0;
+    for (int i = 0; i < len; i++) {
+        if (!BIOS_AddKeyToBuffer(s[i])) break;
+        n++;
+    }
+    return n;
+}
+#endif
+"""
+
 EDITS = [
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW),
     ("src/gui/sdlmain.cpp", CDROM_OLD, CDROM_NEW),
+    ("src/gui/sdlmain.cpp", TYPE_ANCHOR, TYPE_NEW),
 ]
 
 

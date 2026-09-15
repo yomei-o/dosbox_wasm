@@ -285,6 +285,97 @@ function boot() {
 	document.body.appendChild(s);
 }
 
+// -------------------------------------------------------- Japanese input
+//
+// DOSBox-X already knows how to deliver text typed with a host IME: it encodes
+// the text to the guest code page and pushes the bytes into the BIOS keyboard
+// buffer, which is exactly what a DOS FEP does when you confirm a conversion.
+// That handler is compiled out for Emscripten, so scripts/patch-dosbox-x.py
+// exposes its last step as dosbox_x_type_bytes and the text field drives it.
+// The browser's own IME does the conversion, so no DOS FEP is involved.
+
+let sjisTable = null;
+
+/** Invert the browser's own Shift_JIS table rather than shipping one. */
+function buildSjisTable() {
+	const dec = new TextDecoder('shift_jis');
+	const map = new Map();
+	const one = new Uint8Array(1);
+	for (let b = 0x20; b <= 0xff; b++) {
+		if ((b >= 0x81 && b <= 0x9f) || (b >= 0xe0 && b <= 0xfc)) continue;
+		one[0] = b;
+		const ch = dec.decode(one);
+		if (ch.length === 1 && ch !== '\ufffd' && !map.has(ch)) map.set(ch, [b]);
+	}
+	const two = new Uint8Array(2);
+	for (const [from, to] of [[0x81, 0x9f], [0xe0, 0xfc]]) {
+		for (let b1 = from; b1 <= to; b1++) {
+			for (let b2 = 0x40; b2 <= 0xfc; b2++) {
+				if (b2 === 0x7f) continue;
+				two[0] = b1;
+				two[1] = b2;
+				const ch = dec.decode(two);
+				if (ch.length === 1 && ch !== '\ufffd' && !map.has(ch)) map.set(ch, [b1, b2]);
+			}
+		}
+	}
+	return map;
+}
+
+function toSjis(text) {
+	if (!sjisTable) sjisTable = buildSjisTable();
+	const bytes = [];
+	const dropped = [];
+	for (const ch of text) {
+		const b = sjisTable.get(ch);
+		if (b) bytes.push(...b);
+		else dropped.push(ch);
+	}
+	return { bytes: Uint8Array.from(bytes), dropped };
+}
+
+// The BIOS keyboard buffer holds only a handful of entries, so the text is
+// dripped in and whatever the guest has not taken yet stays queued.
+let typePending = new Uint8Array(0);
+let typeTimer = null;
+
+function typeFn() {
+	return (Module && Module._dosbox_x_type_bytes) || window._dosbox_x_type_bytes || null;
+}
+
+function flushTyping() {
+	const fn = typeFn();
+	if (!fn || typePending.length === 0) {
+		clearInterval(typeTimer);
+		typeTimer = null;
+		return;
+	}
+	const chunk = typePending.subarray(0, Math.min(8, typePending.length));
+	const ptr = window._malloc(chunk.length);
+	Module.HEAPU8.set(chunk, ptr);
+	const accepted = fn(ptr, chunk.length);
+	window._free(ptr);
+	if (accepted > 0) typePending = typePending.slice(accepted);
+}
+
+function typeText(text) {
+	if (!typeFn()) {
+		note('この dosbox-x.wasm には文字入力の口がありません（再ビルドが必要です）', true);
+		return;
+	}
+	const { bytes, dropped } = toSjis(text);
+	const merged = new Uint8Array(typePending.length + bytes.length);
+	merged.set(typePending);
+	merged.set(bytes, typePending.length);
+	typePending = merged;
+	if (!typeTimer) typeTimer = setInterval(flushTyping, 40);
+	if (dropped.length) {
+		note('Shift_JIS にない文字は送れませんでした: ' + dropped.join(''), true);
+	} else {
+		note('');
+	}
+}
+
 // ------------------------------------------------------------- file panel
 
 let cwd = WORK;
@@ -504,6 +595,26 @@ $('fep-file').onchange = async (ev) => {
 	} else {
 		setStatus('FEP を受け取りました。起動時に組み込みます。');
 	}
+};
+
+$('ime').addEventListener('keydown', (ev) => {
+	// While the IME is composing, Enter confirms the conversion - it must not
+	// also mean "send", or the text goes before it has been converted.
+	if (ev.key !== 'Enter' || ev.isComposing || ev.keyCode === 229) return;
+	ev.preventDefault();
+	const text = ev.target.value;
+	if (!text) return;
+	ev.target.value = '';
+	typeText(text);
+	$('canvas').focus();
+});
+
+$('ime-send').onclick = () => {
+	const el = $('ime');
+	if (!el.value) return;
+	typeText(el.value);
+	el.value = '';
+	$('canvas').focus();
 };
 
 $('save').onclick = async () => {
