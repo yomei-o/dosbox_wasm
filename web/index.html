@@ -52,10 +52,12 @@ main {
 }
 #screen-wrap { background: #000; border: 1px solid var(--line); border-radius: 4px; line-height: 0; }
 canvas {
+	/* No aspect-ratio: DOSBox-X sizes the canvas itself (the DOS mode plus its
+	   own menu bar), so let the intrinsic ratio stand. */
 	display: block;
 	width: 1280px;
 	max-width: calc(100vw - 44px);
-	aspect-ratio: 4 / 3;
+	height: auto;
 	image-rendering: pixelated;
 	outline: none;
 }
