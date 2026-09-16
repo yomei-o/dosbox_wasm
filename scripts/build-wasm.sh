@@ -26,7 +26,11 @@ WEB=$ROOT/web
 # DOSBox-X's own build-emscripten-sdl2 says 3.1.28, but that release has no
 # linux-arm64 binaries; 3.1.57 is the oldest one that does and builds cleanly.
 EMSDK_VERSION=${EMSDK_VERSION:-3.1.57}
+# Half the cores, at the lowest priority: this build is long enough that it
+# should not make the machine unusable while it runs.
 JOBS=${JOBS:-$( (nproc 2>/dev/null || echo 4) )}
+JOBS=$(( JOBS > 2 ? JOBS / 2 : 1 ))
+NICE=${NICE:-"nice -n 19"}
 
 mkdir -p "$BUILD" "$WEB"
 
@@ -75,7 +79,7 @@ build_lzh() {
 	# bit_stream_reader.c, lh_new_decoder.c, pma_common.c and tree_decode.c are
 	# #included by the decoders rather than compiled separately (they are
 	# EXTRA_DIST in lhasa's lib/Makefile.am), so they are not listed here.
-	emcc -O2 -I"$lib" -I"$lib/public" \
+	$NICE emcc -O2 -I"$lib" -I"$lib/public" \
 		"$ROOT/src/lzhwasm/lzhwasm.c" \
 		"$lib"/crc16.c "$lib"/ext_header.c "$lib"/lha_arch_unix.c \
 		"$lib"/lha_decoder.c "$lib"/lha_endian.c "$lib"/lha_file_header.c \
@@ -130,7 +134,7 @@ build_dosbox() {
 	fi
 
 	echo "==> make -j$JOBS"
-	make -j"$JOBS"
+	$NICE make -j"$JOBS"
 	cp src/dosbox-x "$WEB/dosbox-x.js"
 	cp src/dosbox-x.wasm "$WEB/dosbox-x.wasm"
 	ls -l "$WEB"/dosbox-x.js "$WEB"/dosbox-x.wasm

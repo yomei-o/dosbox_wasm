@@ -75,10 +75,80 @@ extern "C" EMSCRIPTEN_KEEPALIVE int dosbox_x_type_bytes(const unsigned char *s, 
 #endif
 """
 
+# Mouse alignment is hard to judge from the outside: a canvas screenshot often
+# catches a half-drawn frame, so the guest cursor cannot be measured from
+# pixels. Export the numbers instead - where SDL thinks the pointer is, what
+# the clipping rectangle is, and where the guest cursor actually ended up - so
+# the page can compare them directly.
+MOUSE_POS_ANCHOR = """void Mouse_CursorMoved(float xrel,float yrel,float x,float y,bool emulate) {
+"""
+
+MOUSE_POS_NEW = """#if C_EMSCRIPTEN
+extern "C" void Mouse_EmscriptenGetState(float *out) {
+    out[0] = mouse.x;
+    out[1] = mouse.y;
+    out[2] = mouse.min_x;
+    out[3] = mouse.max_x;
+    out[4] = mouse.min_y;
+    out[5] = mouse.max_y;
+    out[6] = (float)mouse.max_screen_x;
+    out[7] = (float)mouse.max_screen_y;
+}
+#endif
+
+""" + MOUSE_POS_ANCHOR
+
+# The probe has to sit after user_cursor_x/y are declared, which is most of the
+# way down the file, so it hangs off that declaration rather than the include
+# block at the top.
+PROBE_ANCHOR = """int user_cursor_x = 0,user_cursor_y = 0;
+"""
+
+PROBE_NEW = PROBE_ANCHOR + """
+#if C_EMSCRIPTEN
+extern "C" void Mouse_EmscriptenGetState(float *out);
+
+/* Snapshot of everything that decides where the guest cursor lands, so that
+ * the page can check the mapping without trying to read it off the canvas:
+ *   0-3   clip rectangle (x, y, w, h) inside the SDL window
+ *   4,5   last host pointer position, relative to the clip origin
+ *   6     mouse captured
+ *   7     autolock
+ *   8,9   guest cursor
+ *   10,11 guest cursor range (max_x, max_y)
+ *   12,13 guest screen size the driver reports
+ */
+static float dosbox_x_mouse_probe_buf[16];
+
+extern "C" EMSCRIPTEN_KEEPALIVE float *dosbox_x_mouse_probe(void) {
+    float *b = dosbox_x_mouse_probe_buf;
+    b[0] = (float)sdl.clip.x;
+    b[1] = (float)sdl.clip.y;
+    b[2] = (float)sdl.clip.w;
+    b[3] = (float)sdl.clip.h;
+    b[4] = (float)user_cursor_x;
+    b[5] = (float)user_cursor_y;
+    b[6] = sdl.mouse.locked ? 1.0f : 0.0f;
+    b[7] = sdl.mouse.autoenable ? 1.0f : 0.0f;
+    float st[8];
+    Mouse_EmscriptenGetState(st);
+    b[8] = st[0];
+    b[9] = st[1];
+    b[10] = st[3];
+    b[11] = st[5];
+    b[12] = st[6];
+    b[13] = st[7];
+    return b;
+}
+#endif
+"""
+
 EDITS = [
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW),
     ("src/gui/sdlmain.cpp", CDROM_OLD, CDROM_NEW),
     ("src/gui/sdlmain.cpp", TYPE_ANCHOR, TYPE_NEW),
+    ("src/ints/mouse.cpp", MOUSE_POS_ANCHOR, MOUSE_POS_NEW),
+    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, PROBE_NEW),
 ]
 
 
