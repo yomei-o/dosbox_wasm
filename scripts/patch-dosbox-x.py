@@ -214,6 +214,32 @@ INT13_NEW = INT13_ANCHOR + """#if C_EMSCRIPTEN
 #endif
 """
 
+# CALLBACK_Idle() is what DOSBox-X spins on whenever it waits for emulated time
+# to pass - the simulated disk transfer delay, the CMOS "update in progress"
+# bit, serial and parallel port waits. Its job is to run the machine nested so
+# that interrupts get handled and time moves on.
+#
+# The Emscripten build also pumps GFX_Events() from there, to keep the browser
+# alive during a long wait. But GFX_Events() contains emscripten_sleep(), so
+# that unwinds Asyncify from several frames inside a callback handler, and the
+# rewind does not put it back: the guest parks on the IRET after the callback
+# and never moves again. Booting a real DOS hits this immediately - first in
+# INT 13h reading the boot sector, then in INT 1Ah waiting on the CMOS.
+#
+# The nested machine run is the part that does the work, so keep that and drop
+# the yield.
+IDLE_OLD = """void CALLBACK_Idle(void) {
+#if C_EMSCRIPTEN
+	void GFX_Events();
+	GFX_Events();
+#endif
+"""
+
+IDLE_NEW = """void CALLBACK_Idle(void) {
+/* No GFX_Events() here under Emscripten: it yields through emscripten_sleep(),
+ * and unwinding Asyncify from inside a callback handler never comes back. */
+"""
+
 EDITS = [
     # (file, find, replace, marker that means "already applied")
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW, "SDL_InitSubSystem(SDL_INIT_JOYSTICK) never returns"),
@@ -224,6 +250,7 @@ EDITS = [
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CPU_PROBE_NEW, "dosbox_x_cpu_probe"),
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CB_PROBE_NEW, "dosbox_x_callback_at"),
     ("src/ints/bios_disk.cpp", INT13_ANCHOR, INT13_NEW, "INT13 enter AH="),
+    ("src/cpu/callback.cpp", IDLE_OLD, IDLE_NEW, "No GFX_Events() here under Emscripten"),
 ]
 
 

@@ -289,123 +289,116 @@ msexpand < MSIMEK.SY_ > MSIMEK.SYS       # 展開
 （ファイル内の文字列で確認）。EMS があればそこに辞書を置き、無ければ
 メインメモリにフォールバックする。
 
-### 本物の MS-DOS 5.0/V を起動する試み — ブートまで到達（2026-09-16）
+### 本物の MS-DOS 5.0/V の上で JW_CAD が動いた（2026-09-16）
 
-MSIME が内蔵 DOS で動かないので実 DOS 路線を試した。
-**ブートセクタの実行までは成功。IO.SYS のロード中で止まっている。**
+**起動する。DOS/V の日本語表示も出る。MSIME も常駐する。JW_CAD も動く。**
+残るは MSIME を呼び出した瞬間にゲストが固まる一点。
 
-#### 地雷1: emscripten は C++ 例外を消す
+#### 根本原因はひとつだった — CALLBACK_Idle と Asyncify
 
-`BOOT` した瞬間にプログラムごと死んで画面が真っ暗になった。DOSBox-X は
-**マシン再起動を `throw int(8)` で実装している**（`src/dos/dos_programs.cpp`
-2337 / 2618 / 3491 行）のに対し、**emscripten は既定で `-fignore-exceptions`
-でコンパイルする**ため、`throw` がそのままトラップになる。
-JW_CAD の構成では BOOT を通らないので今まで表に出なかった。
+`CALLBACK_Idle()` は DOSBox-X がエミュレート時間を進めたいときに必ず呼ぶ
+関数で、入れ子で `DOSBOX_RunMachine()` を回して割り込みを処理させる。
+Emscripten ビルドではそこに `GFX_Events()`（＝`emscripten_sleep()`）が
+入っていて、**割り込みハンドラの数フレーム奥で Asyncify の巻き戻しが起き、
+そこから復帰できない。** ゲストはコールバック直後の IRET で永久に止まる。
 
-修正はビルドフラグだけ:
+実 DOS の起動はこれを連続で踏む:
 
-```
-CFLAGS   += -fexceptions
-CXXFLAGS += -fexceptions
-LDFLAGS  += -fexceptions -sDISABLE_EXCEPTION_CATCHING=0
-```
+| 踏んだ場所 | 呼び出し元 |
+|---|---|
+| `INT 13h` ブートセクタの読み込み | `diskio_delay()` の転送遅延ループ |
+| `INT 1Ah` | CMOS の「更新中」ビット待ち（`src/ints/bios.cpp:3067`）|
 
-`CXXFLAGS` が変わるので configure からやり直し（フルビルド）。
-**例外有効版は `.build/exc/` に置いてある**（`web/` の本番は例外無効のまま。
-JW_CAD には不要なので）。
+対処は2つ。前者は設定で逃げられる:
 
-#### 地雷2: 配布イメージがトリムされている
-
-例外を直しても `Non-System disk or disk error` になる。原因はイメージの
-サイズ:
-
-| | 実サイズ | セクタ数 | BPB の申告 |
-|---|---|---|---|
-| Disk1.IMG | 1,155,072 | 2,256 | **2,880**（1.44MB） |
-
-末尾の空きセクタを削った**トリム済みイメージ**なので、ブートセクタが
-後方セクタを読むと失敗する。1,474,560 バイトまでゼロ埋めすれば直る:
-
-```sh
-dd if=/dev/zero bs=1 count=$((1474560 - $(stat -c%s Disk1.IMG))) >> Disk1_full.IMG
+```ini
+[dos]
+hard drive data rate limit=0
+floppy drive data rate limit=0
 ```
 
-#### 現状: ブートセクタは動いた、その先で止まる
+**JW_CAD が最初から無事だったのはこれが入っていたからで、完全に偶然。**
+
+後者は設定では逃げられないので、`CALLBACK_Idle()` から yield を外した
+（`scripts/patch-dosbox-x.py`）。入れ子のマシン実行が機能の本体で、
+`GFX_Events()` は「待っている間ブラウザを固めない」ためのおまけ。
+
+#### そこに至るまでに踏んだ地雷
+
+1. **emscripten は既定で C++ 例外を消す**（`-fignore-exceptions`）。
+   DOSBox-X はマシン再起動を `throw int(8)` でやるので、`BOOT` が
+   失敗ではなく**トラップ**していた。`-fexceptions` と
+   `-sDISABLE_EXCEPTION_CATCHING=0` を足してフルビルド
+2. **配布イメージがトリムされている。** `Disk1.IMG` は 2,256 セクタしか
+   無いのに BPB は 2,880 と申告するので、後方セクタの読み取りが失敗して
+   `Non-System disk or disk error` になる。1,474,560 バイトへゼロ埋めで解決
+3. `MSIMED.SYS` の入れ忘れ →「かな漢字変換は組み込まれませんでした」
+4. **実 DOS を起動すると DOSBox-X の INT 33h が消える。** JW_CAD は
+   マウスドライバが無いと即終了する（「マウスドライバーが組み込まれて
+   いません」）。Disk1 の `MOUSE.CO_` を展開して `AUTOEXEC.BAT` から実行
+5. テストページを `<script type="module">` にしたら `var Module` が
+   モジュールスコープに閉じて `dosbox-x.js` から見えなくなった。
+   `window.Module` に代入すること
+
+#### C: はホストのディレクトリのままでよい
+
+心配していた「C: をディスクイメージ方式に作り直す大工事」は**不要だった**。
+`MOUNT C <dir>` した状態で `BOOT` すると DOSBox-X がそのディレクトリを
+FAT イメージに変換してゲストへ渡す:
 
 ```
-IMGMOUNT A /work/Disk1_full.IMG -t floppy    # MOUNT C は挟まない
-BOOT -l A
+Drive C is mounted as local directory /work/
+Converting drive C: to FAT...
 ```
 
-```
-Loading 512 bytes of boot code to 7c00
-Dispatching VM event Guest OS Boot
-Alright: DOS kernel shutdown, booting a guest OS
-  CS:IP=0000:7c00 SS:SP=0030:0100 AX=0000 BX=7c00 CX=0001 DX=0000
-```
+JW_CAD も辞書もホスト側に置いたまま、実 DOS から読める。
 
-ここまで完璧。ブートセクタが 0000:7C00 に載って実行が始まっている。
-その後 **CPU は `f000:cf45`（エミュレート BIOS 内）で完全に停止**し、
-画面は消去されたまま何も描かれない（非黒ピクセル 0）。
-つまりブートセクタは IO.SYS を見つけて読み始めたが、その途中で
-BIOS のどこかに入って戻ってこない。
+#### 構成
 
-#### 止まっている場所が判明: INT 13h（BIOS ディスクサービス）
-
-コールバック領域は `f000:ca00` 始まりで 1 個 32 バイトなので、
-`0xcf45` は **番号 42 のオフセット +5**。`dosbox_x_callback_at`
-（同じく `scripts/patch-dosbox-x.py` で追加）に名前を引かせると:
+起動フロッピー `BOOTIME.IMG` は Disk1（パディング済み）から SETUP 関連を
+消して作る。IO.SYS は動かさないこと（ブートセクタが先頭データクラスタに
+あることを期待する）。作成スクリプトは `(scratchpad)/mkboot.sh`。
 
 ```
-t=12s  f000:cf45  →  callback 42 +5: Int 13 Bios disk
-t=18s 以降       →  同じ番地のまま 90 秒間微動だにしない
+A:  IO.SYS MSDOS.SYS COMMAND.COM
+    BILING.SYS $FONT.SYS $DISP.SYS DOSVSYS.SYS $JPNZN16.FNT ...
+    KKCFUNC.SYS MSIMEK.SYS MSIMEI.SYS MSIMED.SYS
+    MOUSE.COM CONFIG.SYS AUTOEXEC.BAT
+C:  (ホストのディレクトリ) MSIME.DIC MSIMER.DIC JWCAD\
 ```
 
-**ブートセクタが IO.SYS を読もうとして INT 13h を呼び、戻ってこない。**
-停止位置はコールバック命令（4バイト）の直後、つまりハンドラから戻った
-ところ。そこで CPU が進まなくなっている。ループではなく完全停止
-（15 サンプル全部同じ番地）。
+`CONFIG.SYS` の順序は Disk1 のものに倣う:
 
-ハンドラの実体は `src/ints/bios_disk.cpp` の `INT13_DiskHandler`
-（`CALLBACK_Setup(call_int13,&INT13_DiskHandler,CB_INT13,"Int 13 Bios disk")`）。
+```
+device=\biling.sys
+device=\$font.sys /u=0
+device=\$disp.sys
+device=\dosvsys.sys
+device=\kkcfunc.sys
+device=\msimek.sys
+device=\msimei.sys
+```
 
-#### 次に当たるところ
+#### 到達点と、残っている一点
 
-1. `INT13_DiskHandler` の読み取り経路（AH=02h）を追う。
-   ASYNCIFY と噛み合わない待ちが入っていないか。
-   BOOT は `FDC_AssignINT13Disk()` でフロッピーを FDC に割り当てるので、
-   FDC エミュレーションが絡んでいる可能性がある
-2. フロッピーを避ける。ハードディスクイメージから起動すれば INT 13h の
-   別経路を通る。ただし起動可能な HDD イメージを作るには DOS 上で
-   `SYS` を実行する必要があり、鶏と卵になる
-3. `cycles=fixed 30000` を変える。停止時 `CPU_Cycles` が常に 0 なので、
-   サイクル配給が止まっている可能性は一応ある
+起動すると `マイクロソフトかな漢字変換 バージョン 2.51` が常駐し、
+JW_CAD がメニューを描いて立ち上がる。文字コマンド → 位置クリックで
+文字列入力になり、**`Alt` + `` ` `` で MSIME のステータスライン
+（`部首 かな カナ 半角 英数 切替`）が画面下部に出る。**
 
-#### この作業の位置づけ（続けるか判断する材料）
+ただしその直後に**ゲストが固まる**。以後どのキーを押しても描画ピクセル数が
+1ドットも変わらず、キャンバスも破れた状態になる。
 
-ここから先は **DOSBox-X の wasm 固有バグを追う作業**であって、
-JW_CAD の機能追加ではない。しかも仮に起動できても、その先に
-「C: をディスクイメージ方式に作り直す（FAT 読み書きの wasm が要る）」
-という別の大仕事が控えている。**日本語入力自体はブラウザ IME 経由で
-既に動いている**ので、実用上の必要性はない。
+次に見るべきは、これも `CALLBACK_Idle` 系かどうか。`dosbox_x_cpu_probe` と
+`dosbox_x_callback_at` で止まっている場所を名前で引けるので、
+INT 13h / INT 1Ah を特定したときと同じ手が使える。
 
-#### 計測用に足したもの
+#### 素材（いずれも gitignore 済み）
 
-`scripts/patch-dosbox-x.py` に `dosbox_x_cpu_probe` を追加した
-（CS:IP / pmode / cycles を返す）。**画面が真っ黒なとき、スクリーンショット
-では「CPU が止まった」のか「CPU は動いているが描画が来ていない」のかを
-区別できない。** この区別ができて初めて前に進めた。
-
-キャンバスのサイズと非黒ピクセル数も併せて見ること。DOSBox-X の
-テキストモードは 720×400 で描かれるので、640×400 のままなら
-シェル画面にすら到達していない。
-
-#### 素材
-
-`.build/msdos/` に Disk1〜3（と `_full` のパディング済み）、
-`.build/msime/` に展開済み MSIME と DOS/V ドライバ一式。
-どちらも gitignore 済み。MS-DOS は Microsoft の商用ソフトなので
-公開リポジトリには置けない。
+`.build/msdos/` に Disk1〜3、パディング済みの `_full`、起動用 `BOOTIME.IMG`。
+`.build/msime/` に展開済みの MSIME と DOS/V ドライバ。
+`.build/exc/` に例外有効ビルドの dosbox-x。
+MS-DOS は Microsoft の商用ソフトなので公開リポジトリには置けない。
 
 ### WXP の同梱経路は残してある
 
