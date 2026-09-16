@@ -163,24 +163,60 @@ extern "C" EMSCRIPTEN_KEEPALIVE uint32_t *dosbox_x_cpu_probe(void) {
 #endif
 """
 
+# When the guest wedges inside the emulated BIOS, the address alone says
+# nothing. DOSBox's callback area is a contiguous run of CB_SIZE-byte stubs and
+# every callback keeps the name it was allocated with, so an address maps to a
+# name - which turns "stuck at f000:cf45" into "stuck in <whatever that is>".
+CB_PROBE_NEW = PROBE_ANCHOR + """
+#if C_EMSCRIPTEN
+extern char* CallBack_Description[];
+
+static char dosbox_x_cb_name_buf[160];
+
+extern "C" EMSCRIPTEN_KEEPALIVE const char *dosbox_x_callback_at(uint32_t seg, uint32_t off) {
+    char *b = dosbox_x_cb_name_buf;
+    size_t n = sizeof(dosbox_x_cb_name_buf);
+
+    if (seg != (uint32_t)CB_SEG || off < (uint32_t)CB_SOFFSET) {
+        snprintf(b, n, "%04x:%04x is outside the callback area (%04x:%04x)",
+                 (unsigned)seg, (unsigned)off, (unsigned)CB_SEG, (unsigned)CB_SOFFSET);
+        return b;
+    }
+
+    unsigned int rel = (unsigned int)(off - (uint32_t)CB_SOFFSET);
+    unsigned int idx = rel / CB_SIZE;
+    if (idx >= CB_MAX) {
+        snprintf(b, n, "%04x:%04x is past the last callback", (unsigned)seg, (unsigned)off);
+        return b;
+    }
+
+    const char *d = CallBack_Description[idx];
+    snprintf(b, n, "callback %u +%u: %s", idx, rel % CB_SIZE, d ? d : "(unnamed)");
+    return b;
+}
+#endif
+"""
+
 EDITS = [
-    ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW),
-    ("src/gui/sdlmain.cpp", CDROM_OLD, CDROM_NEW),
-    ("src/gui/sdlmain.cpp", TYPE_ANCHOR, TYPE_NEW),
-    ("src/ints/mouse.cpp", MOUSE_POS_ANCHOR, MOUSE_POS_NEW),
-    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, PROBE_NEW),
-    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CPU_PROBE_NEW),
+    # (file, find, replace, marker that means "already applied")
+    ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW, "SDL_InitSubSystem(SDL_INIT_JOYSTICK) never returns"),
+    ("src/gui/sdlmain.cpp", CDROM_OLD, CDROM_NEW, "#if !C_EMSCRIPTEN\n#if defined(C_SDL2)"),
+    ("src/gui/sdlmain.cpp", TYPE_ANCHOR, TYPE_NEW, "dosbox_x_type_bytes"),
+    ("src/ints/mouse.cpp", MOUSE_POS_ANCHOR, MOUSE_POS_NEW, "Mouse_EmscriptenGetState"),
+    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, PROBE_NEW, "dosbox_x_mouse_probe"),
+    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CPU_PROBE_NEW, "dosbox_x_cpu_probe"),
+    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CB_PROBE_NEW, "dosbox_x_callback_at"),
 ]
 
 
 def main(root):
     root = pathlib.Path(root)
     changed = 0
-    for rel, old, new in EDITS:
+    for rel, old, new, marker in EDITS:
         path = root / rel
         text = path.read_text(encoding="utf-8", errors="surrogateescape")
-        if new in text:
-            print(f"  already applied: {rel}")
+        if marker in text:
+            print(f"  already applied: {rel} ({marker.splitlines()[0][:40]})")
             continue
         if text.count(old) != 1:
             print(f"  FAILED: {rel}: expected exactly one match, found {text.count(old)}")

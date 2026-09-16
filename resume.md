@@ -350,15 +350,44 @@ Alright: DOS kernel shutdown, booting a guest OS
 つまりブートセクタは IO.SYS を見つけて読み始めたが、その途中で
 BIOS のどこかに入って戻ってこない。
 
+#### 止まっている場所が判明: INT 13h（BIOS ディスクサービス）
+
+コールバック領域は `f000:ca00` 始まりで 1 個 32 バイトなので、
+`0xcf45` は **番号 42 のオフセット +5**。`dosbox_x_callback_at`
+（同じく `scripts/patch-dosbox-x.py` で追加）に名前を引かせると:
+
+```
+t=12s  f000:cf45  →  callback 42 +5: Int 13 Bios disk
+t=18s 以降       →  同じ番地のまま 90 秒間微動だにしない
+```
+
+**ブートセクタが IO.SYS を読もうとして INT 13h を呼び、戻ってこない。**
+停止位置はコールバック命令（4バイト）の直後、つまりハンドラから戻った
+ところ。そこで CPU が進まなくなっている。ループではなく完全停止
+（15 サンプル全部同じ番地）。
+
+ハンドラの実体は `src/ints/bios_disk.cpp` の `INT13_DiskHandler`
+（`CALLBACK_Setup(call_int13,&INT13_DiskHandler,CB_INT13,"Int 13 Bios disk")`）。
+
 #### 次に当たるところ
 
-1. `f000:cf45` が何なのかを特定する。DOSBox-X の BIOS 内なので、
-   その番地に何を置いたかはソースから追える。HLT ループなら何かの
-   割り込み待ち、無限ループなら未実装 BIOS 機能の可能性
-2. 機種設定を振る。`machine=svga_s3` / `cputype=pentium` で試している。
-   `vgaonly` や `cputype=386` も
-3. DOSBox-X 側に BIOS/INT のトレースを足す。`dosbox_x_cpu_probe` と
-   同じ要領でエクスポートを増やせばよい
+1. `INT13_DiskHandler` の読み取り経路（AH=02h）を追う。
+   ASYNCIFY と噛み合わない待ちが入っていないか。
+   BOOT は `FDC_AssignINT13Disk()` でフロッピーを FDC に割り当てるので、
+   FDC エミュレーションが絡んでいる可能性がある
+2. フロッピーを避ける。ハードディスクイメージから起動すれば INT 13h の
+   別経路を通る。ただし起動可能な HDD イメージを作るには DOS 上で
+   `SYS` を実行する必要があり、鶏と卵になる
+3. `cycles=fixed 30000` を変える。停止時 `CPU_Cycles` が常に 0 なので、
+   サイクル配給が止まっている可能性は一応ある
+
+#### この作業の位置づけ（続けるか判断する材料）
+
+ここから先は **DOSBox-X の wasm 固有バグを追う作業**であって、
+JW_CAD の機能追加ではない。しかも仮に起動できても、その先に
+「C: をディスクイメージ方式に作り直す（FAT 読み書きの wasm が要る）」
+という別の大仕事が控えている。**日本語入力自体はブラウザ IME 経由で
+既に動いている**ので、実用上の必要性はない。
 
 #### 計測用に足したもの
 
