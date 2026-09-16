@@ -252,7 +252,8 @@ GFX_START_NEW = """/* Counters for dosbox_x_gfx_probe(), declared here because t
  *   2 opened a frame            3 GFX_EndUpdate called
  *   4 GFX_EndUpdate presented    8 RENDER_StartUpdate called
  *   9 RENDER_StartUpdate gave up before asking for a frame
- *  10 RENDER_EndUpdate called
+ *  10 RENDER_EndUpdate called    11 SDL key event seen
+ *  12 key handed to the emulated keyboard
  */
 unsigned int dosbox_x_gfx_counters[16];
 
@@ -337,6 +338,27 @@ RENDER_END_NEW = """void RENDER_EndUpdate( bool abort ) {
     dosbox_x_gfx_counters[10]++;
 """
 
+KEY_SDL_OLD = """        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            if (sdl.desktop.type == SCREEN_GAMELINK) break;
+#if defined (WIN32) || defined(MACOSX) || defined(C_SDL2)
+"""
+
+KEY_SDL_NEW = """        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            dosbox_x_gfx_counters[11]++;
+            if (sdl.desktop.type == SCREEN_GAMELINK) break;
+#if defined (WIN32) || defined(MACOSX) || defined(C_SDL2)
+"""
+
+KEY_KBD_OLD = """void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
+"""
+
+KEY_KBD_NEW = """void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
+    extern unsigned int dosbox_x_gfx_counters[16];
+    dosbox_x_gfx_counters[12]++;
+"""
+
 EDITS = [
     # (file, find, replace, marker that means "already applied")
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW, "SDL_InitSubSystem(SDL_INIT_JOYSTICK) never returns"),
@@ -354,6 +376,8 @@ EDITS = [
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, GFX_PROBE_NEW, "dosbox_x_gfx_probe_buf"),
     ("src/gui/render.cpp", RENDER_START_OLD, RENDER_START_NEW, "dosbox_x_gfx_counters[8]++"),
     ("src/gui/render.cpp", RENDER_END_OLD, RENDER_END_NEW, "dosbox_x_gfx_counters[10]++"),
+    ("src/gui/sdlmain.cpp", KEY_SDL_OLD, KEY_SDL_NEW, "dosbox_x_gfx_counters[11]++"),
+    ("src/hardware/keyboard.cpp", KEY_KBD_OLD, KEY_KBD_NEW, "dosbox_x_gfx_counters[12]++"),
 ]
 
 

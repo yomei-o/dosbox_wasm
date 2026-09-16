@@ -15,6 +15,8 @@
 #   $BUILD/msime/                 MSIMEK.SYS MSIMEI.SYS MSIMED.SYS KKCFUNC.SYS
 #   $WXP/                         wxp.sys wxdp.sys jisho01.dic jisho02.dic
 #                                 (only for the wxp variant)
+#   $WXPDOSV/wxpdosv.exe          the J-3100-on-DOS/V shim, without which WXP
+#                                 loads but no key ever reaches it
 #
 # Usage:
 #   scripts/make-msdos-boot.sh            BOOTIME.IMG  - MSIME, starts JW_CAD
@@ -33,6 +35,7 @@ set -e
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD=${BUILD:-$ROOT/.build}
 WXP=${WXP:-$BUILD/wxp-src}
+WXPDOSV=${WXPDOSV:-$BUILD/wxpdosv-src}
 export MTOOLS_SKIP_CHECK=1
 
 cd "$BUILD/msdos" || exit 1
@@ -60,6 +63,8 @@ if [ "$1" = wxp ]; then
     for f in wxp.sys wxdp.sys; do
         mcopy -i "$IMG" "$WXP/$f" :: 2>/dev/null && echo "  added $f" || true
     done
+    mcopy -i "$IMG" "$WXPDOSV/wxpdosv.exe" :: 2>/dev/null &&
+        echo "  added wxpdosv.exe" || true
     # WXP looks for its dictionaries on A: by default, and at 650K they do not
     # fit next to the driver. C: is assembled by the page fetching files, so
     # stage them where the page can reach them and point /D1 and /D3 there.
@@ -80,7 +85,7 @@ device=\biling.sys
 device=\$font.sys /u=0
 device=\$disp.sys
 device=\dosvsys.sys
-device=\wxp.sys /D1C:\JISHO01.DIC /D3C:\JISHO02.DIC
+device=\wxp.sys /R /Z /H30 /CS /D1C:\JISHO01.DIC /D3C:\JISHO02.DIC
 device=\wxdp.sys
 files=30
 buffers=20
@@ -100,6 +105,16 @@ CFG
 fi
 
 if [ "$1" = prompt ] || [ "$1" = wxp ]; then
+if [ "$1" = wxp ]; then
+cat > /tmp/AUTOEXEC.BAT <<'AUT'
+@echo off
+path a:\
+a:\mouse
+a:\wxpdosv
+echo MS-DOS 5.0/V with WXP - stopping at the prompt
+c:
+AUT
+else
 cat > /tmp/AUTOEXEC.BAT <<'AUT'
 @echo off
 path a:\
@@ -107,6 +122,7 @@ a:\mouse
 echo MS-DOS 5.0/V - stopping at the prompt
 c:
 AUT
+fi
 else
 cat > /tmp/AUTOEXEC.BAT <<'AUT'
 @echo off

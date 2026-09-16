@@ -205,6 +205,8 @@ function buildConf(videoMode) {
 # field out of reach.
 autolock=false
 output=surface
+# The window matches the guest screen; the page scales the canvas with CSS.
+windowresolution=original
 # DOSBox-X's own menu bar sits exactly on top of JW_CAD's, and reacts to hover.
 showmenu=false
 
@@ -212,6 +214,11 @@ showmenu=false
 machine=svga_s3
 memsize=16
 title=JW_CAD
+# Never let SDL scale the canvas by the display's device pixel ratio. It makes
+# the window much larger than the guest screen, and DOSBox-X then centres the
+# picture inside it at 1:1 - so the drawing looks small and every click lands
+# off by the offset of the clip rectangle.
+dpi aware=false
 
 [dosv]
 dosv=jp

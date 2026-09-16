@@ -85,11 +85,14 @@ main {
 }
 #ime-overlay input:focus { outline: none; }
 canvas {
-	/* 640x480 doubled. Safe to scale in CSS because the mouse is captured, so
-	   DOSBox-X works in relative motion and never maps a client coordinate. */
+	/* The backing store stays 640x480 and the browser scales it. That is safe
+	   at any factor - measured at 1.65x and 2x - because Emscripten's SDL2 maps
+	   a client coordinate onto the backing store itself. It is only safe while
+	   the canvas is not made high-DPI, which is what [dosbox] dpi aware=false
+	   is for. Fill the window: use the height as well as the width, so the
+	   drawing is as large as it can be without scrolling to see it. */
 	display: block;
-	width: 1280px;
-	max-width: calc(100vw - 44px);
+	width: min(calc(100vw - 44px), calc((100vh - 150px) * 4 / 3));
 	height: auto;
 	image-rendering: pixelated;
 	outline: none;
