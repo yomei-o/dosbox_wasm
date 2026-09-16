@@ -454,6 +454,74 @@ RENDER start=+26 busy=+0 end=+52 | GFX start=+0 ... | cpu=5c34:2db6
 そこから `GFX_EndUpdate` まで2段階にわたって間違った方向を追った。
 数えられるものを数えるまでは判断しないこと。
 
+#### WXP も動いた（2026-09-16）
+
+**本物の MS-DOS 5.0/V の上なら WXP は素直に常駐する。** DOSBox-X 内蔵の
+DOS では黙って読み込まれなかったもので、ここが最初の壁だった。
+
+ただし配布されている WXP は **J-3100 版**で、東芝 J-3100 固有のキーと
+BIOS コールを見ている。エミュレートしているのは PC/AT なので、常駐は
+するがキーが一切届かない（`Alt`+`` ` `` でも何も起きない）。
+
+決め手は `wxpdosv4.lzh` に入っている **`wxpdosv.exe`**。これは WXP 本体
+ではなく、**J-3100 の BIOS コールをエミュレートする TSR**（たかぴゅう氏作、
+`WXP for J-3100 on DOS/V Version 0.04`）。AUTOEXEC から常駐させると
+101 キーボードの `Alt`+`` ` `` で FEP が起動する。
+
+到達点:
+
+```
+Alt+`     → 最下行に WXP のガイド（切替 単漢字 文字種 文字幅 登録 補助 / 連 ローマ かな 全 学）
+nihongo   → にほんご
+Space     → 日本語
+```
+
+構成（`scripts/make-msdos-boot.sh wxp`）:
+
+```
+CONFIG.SYS  device=\wxp.sys /R /Z /H30 /CS /D1C:\JISHO01.DIC /D3C:\JISHO02.DIC
+            device=\wxdp.sys
+AUTOEXEC    a:\mouse
+            a:\wxpdosv
+```
+
+辞書は 650K あってフロッピーに載らないので `/D1` `/D3` で C: を見せる。
+`/R` ローマ字入力、`/Z` 全角、`/H30` バッファ、`/CS` シフトJIS。
+検証は `(scratchpad)/wxp2.mjs` + `.build/msdoswxp.html`。
+
+**WXP はリポジトリに入れないこと。** 再配布を禁じている。`wxpdosv.exe` も
+同じ扱いにしてある（どちらも gitignore 済みの `.build/` までしか行かない）。
+
+#### マウスを1回クリックするとゲストが描画をやめる（未解決）
+
+**本物の MS-DOS を起動しているときだけ起きる。** JW_CAD とは無関係で、
+DOS プロンプトだけで再現する（`(scratchpad)/clicktype.mjs`）:
+
+```
+クリック前  VER を打つ → sdl=+6 kbd=+6 drawn=+4  エコーされて実行される
+クリック    sdl=+0 kbd=+0 drawn=+0
+クリック後  VER を打つ → sdl=+6 kbd=+6 drawn=+0  1行も描かれない
+```
+
+`kbd` が増えているのでキーはエミュレート鍵盤まで届いている。`drawn`
+（= `GFX_StartUpdate` の呼び出し回数）が 0 なので、**ゲストが VRAM に
+何も書かなくなっている。**
+
+JW_CAD で文字コマンド → 位置クリックのあと何を打っても画面が変わらない
+のは、これの影。FEP の問題ではない。
+
+`CALLBACK_Idle` 系ではない。`keyboard.cpp` にも `ints/mouse.cpp` にも
+yield は無く、残る `CALLBACK_Idle` の呼び出し元は PC-98 専用の経路
+（`bios.cpp` の INT 18h / GDC / PC-98 タイマ）だけで、`machine=svga_s3`
+では通らない。
+
+次に見るべきこと:
+
+- 移動だけで固まるのか、ボタンを押すと固まるのか
+- 固まった後の CPU の位置（`dosbox_x_cpu_probe` / `dosbox_x_callback_at`）
+- `[keyboard] auxdevice=none` にすると起きないか
+  （起きなければ PS/2 補助デバイスと IRQ12 の経路で確定）
+
 #### 高DPIでマウスがずれ、画面が小さくなる（2026-09-16 に修正）
 
 **ユーザ環境で再現し、こちらの環境では再現しなかったバグ。** 原因は
