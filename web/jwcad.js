@@ -248,8 +248,9 @@ function guestAutoexec(videoMode) {
 	return [
 		'@echo off',
 		'path a:' + BS,
-		// Booting a guest OS takes away DOSBox-X's own INT 33h, and JW_CAD
-		// refuses to start without a mouse driver.
+		// Booting a guest OS takes DOSBox-X's own INT 33h with it - its handler
+		// lives in DOS memory, which the guest then owns - so the guest needs a
+		// mouse driver of its own, and JW_CAD refuses to start without one.
 		'a:' + BS + 'mouse',
 		'c:',
 		'cd ' + BS + 'JWCAD',
