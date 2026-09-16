@@ -254,6 +254,9 @@ GFX_START_NEW = """/* Counters for dosbox_x_gfx_probe(), declared here because t
  *   9 RENDER_StartUpdate gave up before asking for a frame
  *  10 RENDER_EndUpdate called    11 SDL key event seen
  *  12 key handed to the emulated keyboard
+ *   7 guest read port 0x60      13 mouse byte put in the output register
+ *  14 ...of those, with no IRQ 12 raised, so nothing tells the guest
+ *  15 a byte overwrote one the guest had not read yet
  */
 unsigned int dosbox_x_gfx_counters[16];
 
@@ -308,7 +311,6 @@ extern "C" EMSCRIPTEN_KEEPALIVE unsigned int *dosbox_x_gfx_probe(void) {
     for (int i = 0; i < 16; i++) b[i] = dosbox_x_gfx_counters[i];
     b[5] = sdl.active ? 1u : 0u;
     b[6] = sdl.updating ? 1u : 0u;
-    b[7] = (unsigned int)sdl.desktop.type;
     return b;
 }
 #endif
@@ -359,6 +361,146 @@ KEY_KBD_NEW = """void KEYBOARD_AddKey(KBD_KEYS keytype,bool pressed) {
     dosbox_x_gfx_counters[12]++;
 """
 
+P60_OLD = """static void KEYBOARD_SetPort60(uint16_t val) {
+    keyb.auxchanged=(val&AUX)>0;
+    keyb.p60changed=true;
+    keyb.p60data=(uint8_t)val;
+    if (keyb.auxchanged) {
+        if (keyb.cb_irq12) {
+            PIC_ActivateIRQ(12);
+        }
+    }
+"""
+
+P60_NEW = """static void KEYBOARD_SetPort60(uint16_t val) {
+    extern unsigned int dosbox_x_gfx_counters[16];
+    keyb.auxchanged=(val&AUX)>0;
+    if (keyb.p60changed) dosbox_x_gfx_counters[15]++; /* overwrote an unread byte */
+    keyb.p60changed=true;
+    keyb.p60data=(uint8_t)val;
+    if (keyb.auxchanged) {
+        dosbox_x_gfx_counters[13]++;
+        if (keyb.cb_irq12) {
+            PIC_ActivateIRQ(12);
+        }
+        else {
+            /* Into the output register with nothing to tell the guest it is
+             * there - and the next byte is only scheduled from read_p60(). */
+            dosbox_x_gfx_counters[14]++;
+        }
+    }
+"""
+
+READ60_OLD = """    keyb.p60changed=false;
+    keyb.auxchanged=false;
+    if (!keyb.scheduled && keyb.used && !(machine == MCH_PCJR)) {
+"""
+
+READ60_NEW = """    {
+        extern unsigned int dosbox_x_gfx_counters[16];
+        dosbox_x_gfx_counters[7]++;
+    }
+    keyb.p60changed=false;
+    keyb.auxchanged=false;
+    if (!keyb.scheduled && keyb.used && !(machine == MCH_PCJR)) {
+"""
+
+KBD_STATE_ANCHOR = """} keyb;
+
+void PCjr_stuff_scancode(const unsigned char c) {
+"""
+
+KBD_STATE_NEW = """} keyb;
+
+#if C_EMSCRIPTEN
+# include <emscripten.h>
+/*  0 p60changed   a byte is sitting in the output register, unread
+ *  1 auxchanged   ...and it came from the mouse
+ *  2 used         scancodes queued behind it
+ *  3 scheduled    a transfer event is pending
+ *  4 active       keyboard enabled       5 scanning
+ *  6 auxactive    7 cb_irq1              8 cb_irq12
+ *  9 p60data
+ */
+static unsigned int dosbox_x_kbd_state_buf[12];
+
+extern "C" EMSCRIPTEN_KEEPALIVE unsigned int *dosbox_x_kbd_probe(void) {
+    unsigned int *b = dosbox_x_kbd_state_buf;
+    b[0] = keyb.p60changed ? 1u : 0u;
+    b[1] = keyb.auxchanged ? 1u : 0u;
+    b[2] = (unsigned int)keyb.used;
+    b[3] = keyb.scheduled ? 1u : 0u;
+    b[4] = keyb.active ? 1u : 0u;
+    b[5] = keyb.scanning ? 1u : 0u;
+    b[6] = keyb.auxactive ? 1u : 0u;
+    b[7] = keyb.cb_irq1 ? 1u : 0u;
+    b[8] = keyb.cb_irq12 ? 1u : 0u;
+    b[9] = (unsigned int)keyb.p60data;
+    return b;
+}
+#endif
+
+void PCjr_stuff_scancode(const unsigned char c) {
+"""
+
+PIC_STATE_ANCHOR = """static PIC_Controller pics[2];
+"""
+
+PIC_STATE_NEW = """static PIC_Controller pics[2];
+
+#if C_EMSCRIPTEN
+# include <emscripten.h>
+/* Master then slave: request, mask, in-service, and the active IRQ. An IRQ
+ * that is requested, unmasked and never taken says the guest is not servicing
+ * it; one stuck in-service says it never sent the EOI. */
+static unsigned int dosbox_x_pic_state_buf[12];
+
+extern "C" EMSCRIPTEN_KEEPALIVE unsigned int *dosbox_x_pic_probe(void) {
+    unsigned int *b = dosbox_x_pic_state_buf;
+    for (int i = 0; i < 2; i++) {
+        b[i * 4 + 0] = pics[i].irr;
+        b[i * 4 + 1] = pics[i].imr;
+        b[i * 4 + 2] = pics[i].isr;
+        b[i * 4 + 3] = pics[i].active_irq;
+    }
+    return b;
+}
+#endif
+"""
+
+DRAIN_ANCHOR = """unsigned char KEYBOARD_AUX_GetType() {
+"""
+
+DRAIN_NEW = """/* Take the byte the aux device left in the 8042's output register, for a
+ * handler that is standing in for the BIOS and would otherwise leave it there.
+ * The register holds one byte for both the keyboard and the mouse, and the
+ * next one is only scheduled when this one is read, so a byte left behind
+ * stops the keyboard permanently. */
+void KEYBOARD_AUX_DrainPending(void) {
+    if (keyb.p60changed && keyb.auxchanged)
+        (void)read_p60(0x60,1);
+}
+
+unsigned char KEYBOARD_AUX_GetType() {
+"""
+
+INT74_OLD = """static Bitu INT74_Handler(void) {
+    if (mouse.events>0 && !mouse.in_UIR) {
+"""
+
+INT74_NEW = """static Bitu INT74_Handler(void) {
+    /* This handler stands in for the BIOS one, and a BIOS handler reads the
+     * mouse byte from port 0x60. Leaving it in the 8042's single output
+     * register jams the keyboard for good, because the next byte is only
+     * scheduled once that one has been read. */
+    {
+        void KEYBOARD_AUX_DrainPending(void);
+        KEYBOARD_AUX_DrainPending();
+    }
+
+    if (mouse.events>0 && !mouse.in_UIR) {
+"""
+
 EDITS = [
     # (file, find, replace, marker that means "already applied")
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW, "SDL_InitSubSystem(SDL_INIT_JOYSTICK) never returns"),
@@ -378,6 +520,12 @@ EDITS = [
     ("src/gui/render.cpp", RENDER_END_OLD, RENDER_END_NEW, "dosbox_x_gfx_counters[10]++"),
     ("src/gui/sdlmain.cpp", KEY_SDL_OLD, KEY_SDL_NEW, "dosbox_x_gfx_counters[11]++"),
     ("src/hardware/keyboard.cpp", KEY_KBD_OLD, KEY_KBD_NEW, "dosbox_x_gfx_counters[12]++"),
+    ("src/hardware/keyboard.cpp", P60_OLD, P60_NEW, "dosbox_x_gfx_counters[13]++"),
+    ("src/hardware/keyboard.cpp", READ60_OLD, READ60_NEW, "dosbox_x_gfx_counters[7]++"),
+    ("src/hardware/keyboard.cpp", KBD_STATE_ANCHOR, KBD_STATE_NEW, "dosbox_x_kbd_probe"),
+    ("src/hardware/pic.cpp", PIC_STATE_ANCHOR, PIC_STATE_NEW, "dosbox_x_pic_probe"),
+    ("src/hardware/keyboard.cpp", DRAIN_ANCHOR, DRAIN_NEW, "KEYBOARD_AUX_DrainPending"),
+    ("src/ints/mouse.cpp", INT74_OLD, INT74_NEW, "KEYBOARD_AUX_DrainPending();"),
 ]
 
 
