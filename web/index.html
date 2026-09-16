@@ -157,7 +157,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 </div>
 
 <main>
-	<div id="screen-wrap"><canvas id="canvas" tabindex="0" width="640" height="480"></canvas></div>
+	<div id="screen-wrap"><canvas id="canvas" tabindex="0" width="640" height="480" oncontextmenu="return false"></canvas></div>
 	<div id="status">起動しています…</div>
 
 	<div class="panel">
@@ -186,17 +186,11 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<strong>ファイルを入れる</strong> で手元の図面を持ち込めます。
 		</p>
 
-		<h2>マウス — 掴む／解放</h2>
+		<h2>マウス</h2>
 		<p>
-			<strong>画面を一度クリックするとマウスを掴みます。</strong>掴んでいる間だけ
-			JW_CAD のカーソルがマウスに追従します。掴んでいる間はページ上の他の場所を
-			クリックできないので、<strong><kbd>Esc</kbd> で解放</strong>してください。
-			<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> なら解放と同時に
-			日本語入力欄にカーソルが入ります。
-		</p>
-		<p>
-			掴んでいない状態ではカーソルが合いません。これは DOSBox-X が
-			キャプチャ前提で相対移動を送るためで、現在の既知の問題です。
+			マウスは<strong>掴みません</strong>。カーソルはそのままポインタに追従するので、
+			画面と上の入力欄を自由に行き来できます。
+			<strong>右クリックもそのまま JW_CAD に渡ります</strong>（ブラウザのメニューは出ません）。
 		</p>
 
 		<h2>キー操作</h2>

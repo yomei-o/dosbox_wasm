@@ -295,6 +295,15 @@ function boot() {
 
 	canvas.addEventListener('pointerdown', () => canvas.focus());
 
+	// JW_CAD uses the right button constantly - it is half of its two-button
+	// idiom - so the browser context menu has to stay out of the way. Also stop
+	// the middle button from starting an autoscroll, and kill selection
+	// drags, both of which interrupt a drag in the drawing.
+	canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+	canvas.addEventListener('auxclick', (ev) => ev.preventDefault());
+	canvas.addEventListener('dragstart', (ev) => ev.preventDefault());
+	canvas.addEventListener('selectstart', (ev) => ev.preventDefault());
+
 	// Clicking the screen hands the pointer to the emulator, and while it is
 	// held there is no way to reach anything else on the page - including the
 	// Japanese input field, which is the whole point of it. Esc is the
