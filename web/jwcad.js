@@ -39,16 +39,44 @@ function trace(s) {
 	} catch { /* the trace is best effort */ }
 }
 
-// SDL2's Emscripten backend listens for keys on the window, so anything typed
-// into the Japanese input field would also reach DOS and fire JW_CAD commands.
-// Registered here, at module scope, this runs before dosbox-x.js is appended
-// and therefore before SDL's own listener, so it can stop the event dead.
+// SDL2's Emscripten backend listens for keys on the window, so a keystroke
+// meant for the Japanese input would also reach DOS and fire a JW_CAD command.
+// This runs at module scope, before dosbox-x.js is appended and therefore
+// before SDL's listener, and stops those events dead.
+//
+// Stopping them at the window also means the focused field never sees its own
+// listeners, so every key this page acts on is decided here.
+function inFormField() {
+	const el = document.activeElement;
+	return el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA');
+}
+
 for (const type of ['keydown', 'keyup', 'keypress']) {
 	window.addEventListener(type, (ev) => {
-		const el = document.activeElement;
-		if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) {
+		const composing = ev.isComposing || ev.keyCode === 229;
+
+		// Ctrl+Space opens and closes the on-screen input, from either side.
+		if (type === 'keydown' && ev.ctrlKey && ev.code === 'Space' && !composing) {
+			ev.preventDefault();
 			ev.stopImmediatePropagation();
+			if ($('ime-overlay').hidden) imeOpen();
+			else imeClose(false);
+			return;
 		}
+
+		if (!inFormField()) return;
+
+		if (type === 'keydown' && document.activeElement.id === 'ime' && !composing) {
+			if (ev.key === 'Enter') {
+				ev.preventDefault();
+				imeClose(true);
+			} else if (ev.key === 'Escape') {
+				ev.preventDefault();
+				imeClose(false);
+			}
+		}
+
+		ev.stopImmediatePropagation();
 	}, true);
 }
 
@@ -287,8 +315,7 @@ function boot() {
 		onAbort: (w) => { trace('ABORT|' + w); setStatus('異常終了しました: ' + w, true); },
 		onRuntimeInitialized: () => {
 			canvas.focus();
-			setStatus('実行中 — 画面をクリックでマウスを掴み、Esc で解放。' +
-				'日本語は上の欄へ（Ctrl+Shift+Space でいつでも戻れます）');
+			setStatus('実行中 — 日本語は Ctrl+Space（画面上に入力欄が開きます）');
 		},
 	};
 	window.Module = Module;
@@ -304,23 +331,6 @@ function boot() {
 	canvas.addEventListener('dragstart', (ev) => ev.preventDefault());
 	canvas.addEventListener('selectstart', (ev) => ev.preventDefault());
 
-	// Clicking the screen hands the pointer to the emulator, and while it is
-	// held there is no way to reach anything else on the page - including the
-	// Japanese input field, which is the whole point of it. Esc is the
-	// browser's own way out and cannot be suppressed; Ctrl+Shift+Space is a
-	// second route that also puts the caret straight in the field.
-	document.addEventListener('pointerlockchange', () => {
-		const locked = document.pointerLockElement === canvas;
-		$('locked').textContent = locked ? 'マウスを掴んでいます — Esc で解放' : '';
-		if (!locked) $('ime').focus();
-	});
-
-	window.addEventListener('keydown', (ev) => {
-		if (!ev.ctrlKey || !ev.shiftKey || ev.code !== 'Space') return;
-		ev.preventDefault();
-		if (document.pointerLockElement) document.exitPointerLock();
-		$('ime').focus();
-	}, true);
 
 	const s = document.createElement('script');
 	s.src = 'dosbox-x.js';
@@ -640,25 +650,27 @@ $('fep-file').onchange = async (ev) => {
 	}
 };
 
-$('ime').addEventListener('keydown', (ev) => {
-	// While the IME is composing, Enter confirms the conversion - it must not
-	// also mean "send", or the text goes before it has been converted.
-	if (ev.key !== 'Enter' || ev.isComposing || ev.keyCode === 229) return;
-	ev.preventDefault();
-	const text = ev.target.value;
-	if (!text) return;
-	ev.target.value = '';
-	typeText(text);
-	$('canvas').focus();
-});
-
-$('ime-send').onclick = () => {
+// Placing text in a drawing happens over and over, so the input sits on the
+// emulator screen and is reached with a key. Going to a field elsewhere on the
+// page with the mouse for every label is not usable.
+function imeOpen() {
+	const box = $('ime-overlay');
+	if (!box.hidden) return;
+	box.hidden = false;
 	const el = $('ime');
-	if (!el.value) return;
-	typeText(el.value);
 	el.value = '';
+	el.focus();
+}
+
+function imeClose(send) {
+	const box = $('ime-overlay');
+	const el = $('ime');
+	const text = el.value;
+	el.value = '';
+	box.hidden = true;
 	$('canvas').focus();
-};
+	if (send && text) typeText(text);
+}
 
 $('save').onclick = async () => {
 	await persist();

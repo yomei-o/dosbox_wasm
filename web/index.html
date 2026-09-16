@@ -50,7 +50,40 @@ main {
 	gap: 14px;
 	padding: 20px;
 }
-#screen-wrap { background: #000; border: 1px solid var(--line); border-radius: 4px; line-height: 0; }
+#screen-wrap {
+	position: relative;
+	background: #000;
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	line-height: 0;
+}
+/* Sits on the emulator screen, so placing text does not mean looking away. */
+#ime-overlay {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	padding: 8px 12px;
+	background: rgba(20, 22, 26, .92);
+	border-top: 2px solid var(--accent);
+	line-height: 1.5;
+}
+#ime-overlay .tag { color: var(--accent); font-size: 13px; white-space: nowrap; }
+#ime-overlay .hint { color: var(--dim); font-size: 12px; white-space: nowrap; }
+#ime-overlay input {
+	flex: 1;
+	min-width: 0;
+	font: 16px/1.5 system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif;
+	color: var(--fg);
+	background: #11131a;
+	border: 1px solid var(--accent);
+	border-radius: 4px;
+	padding: 4px 8px;
+}
+#ime-overlay input:focus { outline: none; }
 canvas {
 	/* 640x480 doubled. Safe to scale in CSS because the mouse is captured, so
 	   DOSBox-X works in relative motion and never maps a client coordinate. */
@@ -61,26 +94,6 @@ canvas {
 	image-rendering: pixelated;
 	outline: none;
 }
-#ime-bar {
-	display: flex;
-	gap: 8px;
-	align-items: center;
-	padding: 8px 20px;
-	background: var(--panel);
-	border-bottom: 1px solid var(--line);
-}
-#ime-bar input {
-	flex: 1;
-	max-width: 520px;
-	font: inherit;
-	color: var(--fg);
-	background: #262b34;
-	border: 1px solid var(--line);
-	border-radius: 6px;
-	padding: 5px 10px;
-}
-#ime-bar input:focus { border-color: var(--accent); outline: none; }
-#locked { color: #ffcf6a; font-size: 13px; }
 #status { min-height: 1.6em; color: var(--dim); font-variant-numeric: tabular-nums; }
 #status.err { color: #ff8a8a; }
 .panel {
@@ -149,15 +162,17 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 	<button id="save">保存</button>
 </header>
 
-<div id="ime-bar">
-	<label for="ime">日本語入力</label>
-	<input type="text" id="ime" placeholder="ここに入力して Enter（ブラウザの IME が使えます）" autocomplete="off">
-	<button id="ime-send">送る</button>
-	<span id="locked"></span>
-</div>
+
 
 <main>
-	<div id="screen-wrap"><canvas id="canvas" tabindex="0" width="640" height="480" oncontextmenu="return false"></canvas></div>
+	<div id="screen-wrap">
+		<canvas id="canvas" tabindex="0" width="640" height="480" oncontextmenu="return false"></canvas>
+		<div id="ime-overlay" hidden>
+			<span class="tag">かな漢字</span>
+			<input type="text" id="ime" autocomplete="off" autocapitalize="off" spellcheck="false">
+			<span class="hint">Enter で送信 / Esc で戻る</span>
+		</div>
+	</div>
 	<div id="status">起動しています…</div>
 
 	<div class="panel">
@@ -206,16 +221,19 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<li>右メニューの <strong>文 字</strong>（キーは <kbd>A</kbd>）を選ぶ</li>
 			<li>図面上の書きたい位置をクリックする</li>
 			<li>画面の上に <strong>文字列入力</strong> と緑のカーソルが出る</li>
-			<li><strong>ここでページ上部の「日本語入力」欄をクリックし</strong>、
+			<li><kbd>Ctrl</kbd>+<kbd>Space</kbd> を押す。<strong>画面の下に入力欄が開く</strong>ので、
 				いつもの IME で日本語を打って <kbd>Enter</kbd></li>
-			<li>変換した文字列が <strong>文字列入力</strong> に入る。
-				もう一度 <kbd>Enter</kbd> で確定し、置く位置をクリック</li>
+			<li>入力欄が閉じてキー操作が JW_CAD に戻る。文字列が <strong>文字列入力</strong> に
+				入っているので、<kbd>Enter</kbd> で確定して置く位置をクリック</li>
 		</ol>
+		<p>
+			入力欄は画面の上に重ねて出るので、目もマウスも動かさずに済みます。
+			<kbd>Esc</kbd> で何も送らずに閉じられます。
+		</p>
 		<p>
 			<strong>かな漢字変換はブラウザの IME が行います。</strong>DOS 側の FEP は要りません。
 			確定した文字列が Shift_JIS に変換され、JW_CAD のキーボードバッファへ直接送られます。
-			JW_CAD の画面に直接タイプしても日本語は打てません（DOS には FEP がないため）。
-			かならず上の欄を経由してください。
+			JW_CAD の画面に直接タイプしても日本語にはなりません（DOS 側に FEP がないため）。
 		</p>
 		<p>
 			DOSBox-X はもともと、ホストの IME で打った文字をゲストのコードページに変換して
