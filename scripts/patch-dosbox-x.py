@@ -197,23 +197,6 @@ extern "C" EMSCRIPTEN_KEEPALIVE const char *dosbox_x_callback_at(uint32_t seg, u
 #endif
 """
 
-# The guest wedges on the IRET right after the INT 13h callback, with the page
-# still responsive - so the handler is not spinning, and the CPU simply stops.
-# Log every entry and every exit: one entry with no exit means the handler
-# never returned, repeated pairs mean something else is stopping the core.
-INT13_ANCHOR = """static Bitu INT13_DiskHandler(void) {
-"""
-
-INT13_NEW = INT13_ANCHOR + """#if C_EMSCRIPTEN
-    LOG_MSG("INT13 enter AH=%02x AL=%02x DL=%02x CH=%02x CL=%02x DH=%02x ES:BX=%04x:%04x",
-        (unsigned)reg_ah,(unsigned)reg_al,(unsigned)reg_dl,(unsigned)reg_ch,
-        (unsigned)reg_cl,(unsigned)reg_dh,(unsigned)SegValue(es),(unsigned)reg_bx);
-    struct Int13Trace {
-        ~Int13Trace() { LOG_MSG("INT13 leave AH=%02x CF=%u",(unsigned)reg_ah,(unsigned)(reg_flags&1)); }
-    } int13_trace;
-#endif
-"""
-
 # CALLBACK_Idle() is what DOSBox-X spins on whenever it waits for emulated time
 # to pass - the simulated disk transfer delay, the CMOS "update in progress"
 # bit, serial and parallel port waits. Its job is to run the machine nested so
@@ -510,7 +493,6 @@ EDITS = [
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, PROBE_NEW, "dosbox_x_mouse_probe"),
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CPU_PROBE_NEW, "dosbox_x_cpu_probe"),
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CB_PROBE_NEW, "dosbox_x_callback_at"),
-    ("src/ints/bios_disk.cpp", INT13_ANCHOR, INT13_NEW, "INT13 enter AH="),
     ("src/cpu/callback.cpp", IDLE_OLD, IDLE_NEW, "No GFX_Events() here under Emscripten"),
     ("src/gui/sdlmain.cpp", GFX_START_OLD, GFX_START_NEW, "dosbox_x_gfx_counters[0]++"),
     ("src/gui/sdlmain.cpp", GFX_END_OLD, GFX_END_NEW, "dosbox_x_gfx_counters[3]++"),
