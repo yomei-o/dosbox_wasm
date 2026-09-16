@@ -489,8 +489,14 @@ AUTOEXEC    a:\mouse
 `/R` ローマ字入力、`/Z` 全角、`/H30` バッファ、`/CS` シフトJIS。
 検証は `(scratchpad)/wxp2.mjs` + `.build/msdoswxp.html`。
 
-**WXP はリポジトリに入れないこと。** 再配布を禁じている。`wxpdosv.exe` も
-同じ扱いにしてある（どちらも gitignore 済みの `.build/` までしか行かない）。
+**WXP 本体（`wxp.sys` / `wxdp.sys` / 辞書）はリポジトリに入れないこと。**
+再配布を禁じている（`third_party/wxpj31.lzh` は gitignore 済み）。
+
+`wxpdosv` は別扱いでよい。**作者が明示的に権利を放棄している**
+（`WXPDOSV.DOC`「権利は放棄しますんで、煮るなり焼くなりお好きなように
+お使いください。」）ので、`third_party/wxpdosv4.lzh` として同梱済み。
+同じ書庫の `wxpatch.com` は他者のパッチを元にしたものと書かれていて
+この放棄の対象か不明だが、V-Text 用で今回の構成では使わない。
 
 #### マウスを1回クリックするとゲストが描画をやめる（未解決）
 
