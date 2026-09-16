@@ -235,6 +235,24 @@ ERROR CPU:Illegal Unhandled Interrupt Called 6      ← 以後ずっと繰り返
 MSIME が前提にしている DOS 内部構造か DOS/V のデバイス
 （`$IBMAFNT` など）が噛み合っていないと思われる。
 
+#### 切り分けた結果（安い可能性は全部潰した）
+
+| 試したこと | 結果 |
+|---|---|
+| MSIMEK.SYS 単独 | Init 直後に INT 6 無限ループ |
+| DOS/V ドライバ一式を前に入れる<br>(BILING → $FONT → $DISP → DOSVSYS → KKCFUNC) | **ドライバは全部正常にロードされる**が、MSIMEK で同じループ |
+| `dosv=off`（本物のドライバに任せる） | 同じ |
+| `ems=false`（辞書をメインメモリに） | 同じ（21,164回ループ） |
+| DOS バージョン | DOSBox-X は既定で 5.0 を名乗るので元から一致 |
+
+**前提ドライバ不足でも EMS でも DOS バージョンでもない。**
+ の初期化コードが DOSBox-X の内蔵 DOS の上では
+どこか不正な場所へ飛んでいる。INT 6 はデータを実行したときの症状なので、
+DOS 内部構造か何かのポインタが期待と違うのだと思われる。
+
+なお **DOS/V ドライバ一式（$FONT.SYS / $DISP.SYS / BILING.SYS / KKCFUNC.SYS）は
+DOSBox-X の内蔵 DOS 上で問題なくロードできる**ことは分かった。これは収穫。
+
 #### 残っている道
 
 **本物の MS-DOS 5.0/V を起動する。** `IMGMOUNT` + `BOOT` でフロッピー
