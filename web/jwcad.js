@@ -55,12 +55,15 @@ for (const type of ['keydown', 'keyup', 'keypress']) {
 	window.addEventListener(type, (ev) => {
 		const composing = ev.isComposing || ev.keyCode === 229;
 
-		// Ctrl+Space opens and closes the on-screen input, from either side.
+		// Ctrl+Space reaches the on-screen input from either side: it opens it,
+		// or takes focus back to it when it is open but the canvas has focus -
+		// which is where a click to place the next label leaves it.
 		if (type === 'keydown' && ev.ctrlKey && ev.code === 'Space' && !composing) {
 			ev.preventDefault();
 			ev.stopImmediatePropagation();
 			if ($('ime-overlay').hidden) imeOpen();
-			else imeClose(false);
+			else if (document.activeElement.id !== 'ime') $('ime').focus();
+			else imeClose();
 			return;
 		}
 
@@ -69,10 +72,14 @@ for (const type of ['keydown', 'keyup', 'keypress']) {
 		if (type === 'keydown' && document.activeElement.id === 'ime' && !composing) {
 			if (ev.key === 'Enter') {
 				ev.preventDefault();
-				imeClose(true);
+				imeSend();
 			} else if (ev.key === 'Escape') {
 				ev.preventDefault();
-				imeClose(false);
+				imeClose();
+			} else if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+				// Drawings repeat their labels, so let the last few come back.
+				ev.preventDefault();
+				imeRecall(ev.key === 'ArrowUp' ? 1 : -1);
 			}
 		}
 
@@ -660,23 +667,52 @@ $('fep-file').onchange = async (ev) => {
 // Placing text in a drawing happens over and over, so the input sits on the
 // emulator screen and is reached with a key. Going to a field elsewhere on the
 // page with the mouse for every label is not usable.
+const imeHistory = [];
+let imeHistAt = -1;
+
 function imeOpen() {
 	const box = $('ime-overlay');
-	if (!box.hidden) return;
 	box.hidden = false;
 	const el = $('ime');
 	el.value = '';
+	imeHistAt = -1;
 	el.focus();
 }
 
-function imeClose(send) {
-	const box = $('ime-overlay');
+// Sending does not close it. A label needs a position clicked on the canvas
+// first, and that click takes focus off the field anyway, so leaving the field
+// on screen keeps the loop to click, Ctrl+Space, type, Enter - and keeps what
+// was sent last in view.
+function imeSend() {
 	const el = $('ime');
 	const text = el.value;
 	el.value = '';
-	box.hidden = true;
+	imeHistAt = -1;
+	if (!text) return;
+	if (imeHistory[0] !== text) imeHistory.unshift(text);
+	imeHistory.length = Math.min(imeHistory.length, 20);
+	const last = $('ime-last');
+	last.hidden = false;
+	last.innerHTML = '直前: <b></b>';
+	last.querySelector('b').textContent = text;
 	$('canvas').focus();
-	if (send && text) typeText(text);
+	typeText(text);
+}
+
+function imeClose() {
+	const el = $('ime');
+	el.value = '';
+	imeHistAt = -1;
+	$('ime-overlay').hidden = true;
+	$('canvas').focus();
+}
+
+function imeRecall(dir) {
+	if (!imeHistory.length) return;
+	imeHistAt = Math.max(-1, Math.min(imeHistory.length - 1, imeHistAt + dir));
+	const el = $('ime');
+	el.value = imeHistAt < 0 ? '' : imeHistory[imeHistAt];
+	el.setSelectionRange(el.value.length, el.value.length);
 }
 
 $('save').onclick = async () => {
