@@ -51,26 +51,22 @@ main {
 	padding: 20px;
 }
 #screen-wrap {
-	position: relative;
 	background: #000;
 	border: 1px solid var(--line);
 	border-radius: 4px;
 	line-height: 0;
 }
-/* Sits on the emulator screen, so placing text does not mean looking away -
-   and at the top, because that is where JW_CAD draws its own string input
-   line. What you are composing and where it lands stay next to each other. */
+/* Directly under the screen and inside the same frame: near enough that
+   placing text does not mean looking away, and covering none of it. JW_CAD
+   uses the top rows for the string input line and its parameters, and the
+   bottom row for the status bar, so there is nothing on screen to sit on. */
 #ime-overlay {
-	position: absolute;
-	left: 0;
-	right: 0;
-	top: 0;
 	display: flex;
 	gap: 10px;
 	align-items: center;
 	padding: 8px 12px;
 	background: rgba(20, 22, 26, .92);
-	border-bottom: 2px solid var(--accent);
+	border-top: 2px solid var(--accent);
 	line-height: 1.5;
 }
 #ime-overlay .last { color: var(--dim); font-size: 12px; white-space: nowrap; }
