@@ -240,6 +240,103 @@ IDLE_NEW = """void CALLBACK_Idle(void) {
  * and unwinding Asyncify from inside a callback handler never comes back. */
 """
 
+GFX_START_OLD = """bool GFX_StartUpdate(uint8_t* &pixels,Bitu &pitch)
+{
+    if (!sdl.active || sdl.updating)
+        return false;
+"""
+
+GFX_START_NEW = """/* Counters for dosbox_x_gfx_probe(), declared here because this is the first
+ * point in the file that both halves of the present path can see.
+ *   0 GFX_StartUpdate called     1 refused (inactive, or a frame already open)
+ *   2 opened a frame            3 GFX_EndUpdate called
+ *   4 GFX_EndUpdate presented    8 RENDER_StartUpdate called
+ *   9 RENDER_StartUpdate gave up before asking for a frame
+ *  10 RENDER_EndUpdate called
+ */
+unsigned int dosbox_x_gfx_counters[16];
+
+bool GFX_StartUpdate(uint8_t* &pixels,Bitu &pitch)
+{
+    dosbox_x_gfx_counters[0]++;
+    if (!sdl.active || sdl.updating) {
+        dosbox_x_gfx_counters[1]++;
+        return false;
+    }
+    dosbox_x_gfx_counters[2]++;
+"""
+
+# GFX_EndUpdate gives up early in several places; counting the entry and the
+# one point where output actually happens tells the two apart.
+GFX_END_OLD = """void GFX_EndUpdate(const uint16_t *changedLines) {
+#if C_EMSCRIPTEN
+    emscripten_sleep(0);
+#endif
+"""
+
+GFX_END_NEW = """void GFX_EndUpdate(const uint16_t *changedLines) {
+    dosbox_x_gfx_counters[3]++;
+#if C_EMSCRIPTEN
+    emscripten_sleep(0);
+#endif
+"""
+
+GFX_PRESENT_OLD = """        case SCREEN_SURFACE:
+            OUTPUT_SURFACE_EndUpdate(changedLines);
+            break;
+"""
+
+GFX_PRESENT_NEW = """        case SCREEN_SURFACE:
+            dosbox_x_gfx_counters[4]++;
+            OUTPUT_SURFACE_EndUpdate(changedLines);
+            break;
+"""
+
+# A frozen screen with a running CPU means frames stop being presented. Report
+# the counters together with the two flags that gate them, so that "nothing is
+# drawing" can be pinned on a specific gate rather than guessed at.
+GFX_PROBE_NEW = PROBE_ANCHOR + """
+#if C_EMSCRIPTEN
+extern unsigned int dosbox_x_gfx_counters[16];
+
+/* The counters above, with 5 sdl.active, 6 sdl.updating, 7 sdl.desktop.type */
+static unsigned int dosbox_x_gfx_probe_buf[16];
+
+extern "C" EMSCRIPTEN_KEEPALIVE unsigned int *dosbox_x_gfx_probe(void) {
+    unsigned int *b = dosbox_x_gfx_probe_buf;
+    for (int i = 0; i < 16; i++) b[i] = dosbox_x_gfx_counters[i];
+    b[5] = sdl.active ? 1u : 0u;
+    b[6] = sdl.updating ? 1u : 0u;
+    b[7] = (unsigned int)sdl.desktop.type;
+    return b;
+}
+#endif
+"""
+
+RENDER_START_OLD = """bool RENDER_StartUpdate(void) {
+
+    if (GCC_UNLIKELY(render.updating))
+        return false;
+"""
+
+RENDER_START_NEW = """bool RENDER_StartUpdate(void) {
+    extern unsigned int dosbox_x_gfx_counters[16];
+    dosbox_x_gfx_counters[8]++;
+
+    if (GCC_UNLIKELY(render.updating)) {
+        dosbox_x_gfx_counters[9]++;
+        return false;
+    }
+"""
+
+RENDER_END_OLD = """void RENDER_EndUpdate( bool abort ) {
+"""
+
+RENDER_END_NEW = """void RENDER_EndUpdate( bool abort ) {
+    extern unsigned int dosbox_x_gfx_counters[16];
+    dosbox_x_gfx_counters[10]++;
+"""
+
 EDITS = [
     # (file, find, replace, marker that means "already applied")
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW, "SDL_InitSubSystem(SDL_INIT_JOYSTICK) never returns"),
@@ -251,6 +348,12 @@ EDITS = [
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CB_PROBE_NEW, "dosbox_x_callback_at"),
     ("src/ints/bios_disk.cpp", INT13_ANCHOR, INT13_NEW, "INT13 enter AH="),
     ("src/cpu/callback.cpp", IDLE_OLD, IDLE_NEW, "No GFX_Events() here under Emscripten"),
+    ("src/gui/sdlmain.cpp", GFX_START_OLD, GFX_START_NEW, "dosbox_x_gfx_counters[0]++"),
+    ("src/gui/sdlmain.cpp", GFX_END_OLD, GFX_END_NEW, "dosbox_x_gfx_counters[3]++"),
+    ("src/gui/sdlmain.cpp", GFX_PRESENT_OLD, GFX_PRESENT_NEW, "dosbox_x_gfx_counters[4]++"),
+    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, GFX_PROBE_NEW, "dosbox_x_gfx_probe_buf"),
+    ("src/gui/render.cpp", RENDER_START_OLD, RENDER_START_NEW, "dosbox_x_gfx_counters[8]++"),
+    ("src/gui/render.cpp", RENDER_END_OLD, RENDER_END_NEW, "dosbox_x_gfx_counters[10]++"),
 ]
 
 
