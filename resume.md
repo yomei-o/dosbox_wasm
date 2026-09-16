@@ -289,6 +289,78 @@ msexpand < MSIMEK.SY_ > MSIMEK.SYS       # 展開
 （ファイル内の文字列で確認）。EMS があればそこに辞書を置き、無ければ
 メインメモリにフォールバックする。
 
+### 本物の MS-DOS 5.0/V を起動する試み — 途中（2026-09-16）
+
+MSIME が内蔵 DOS で動かないので、実 DOS を起動する路線を試した。
+**ブートの受け渡しまでは到達したが、画面が出ない。**
+
+#### まず踏んだ地雷: emscripten は C++ 例外を消す
+
+`BOOT` した瞬間にプログラムが死んで画面が真っ暗になる。原因は
+DOSBox-X が**マシン再起動を `throw int(8)` で実装している**こと
+（`src/dos/dos_programs.cpp` の 2337 / 2618 / 3491 行）。
+一方 **emscripten は既定で `-fignore-exceptions` でコンパイルする**ので、
+例外機構が無く `throw` がそのままトラップになる。
+
+JW_CAD 用の構成では BOOT を通らないので今まで表に出なかった。
+
+修正はビルドフラグだけ:
+
+```
+CFLAGS   += -fexceptions
+CXXFLAGS += -fexceptions
+LDFLAGS  += -fexceptions -sDISABLE_EXCEPTION_CATCHING=0
+```
+
+`CXXFLAGS` が変わるので configure からやり直し（フルビルド）。
+これで死ななくなり、ページも生きたまま BOOT を通過するようになった。
+**例外有効版は `.build/exc/` に置いてある**（`web/` の本番ビルドは
+例外無効のまま。JW_CAD 側には不要なので）。
+
+#### 現状: ブートは渡るが画面が出ない
+
+```
+IMGMOUNT A /work/Disk1.IMG -t floppy
+BOOT -l A
+```
+
+トレースはここまで正常:
+
+```
+FAT: BPB says 18 sectors/track 2 heads 512 bytes/sector
+Mounted FAT volume is FAT12 with 2847 clusters
+DIRCACHE: Set volume label to DISK      1
+...
+Mounted empty C/H/S/sz 80/2/18/512 1440KB      ← 気になる
+Booting guest OS stack_seg=0x0030 load_seg=0x07c0
+```
+
+イメージは正しく読めていて（ボリュームラベル `DISK 1` まで見えている）、
+ブートセクタをロードしてゲストに制御を渡している。エラーも abort も無い。
+その後 DOSBox-X が喋らなくなるのは、ゲストに移れば当然なので異常ではない。
+
+**しかし画面は最初から最後まで真っ暗。** 120秒待っても変化なし。
+
+#### 次に当たるべきところ
+
+1. **`Mounted empty C/H/S/sz 80/2/18/512 1440KB`** — ブート直前に A: が
+   空の 1.44MB として再マウントされているように読める。`MOUNT C` を
+   外しても消えなかったので BOOT 自身の動作。空のドライブから起動して
+   いるなら画面が出ないのは当然。ここが第一容疑
+2. ゲストが本当に実行されているかの確認。CPU が進んでいるかを
+   DOSBox-X 側から観測する（`dosbox_x_mouse_probe` と同じ要領で
+   レジスタや実行カウンタを出すエクスポートを足せば分かる）
+3. 画面出力の経路。マシンリセットを挟んだ後に `output=surface` の
+   キャンバスが再初期化されているか
+4. `BOOT` の引数。`BOOT -l A` ではなく `BOOT /work/Disk1.IMG -l A` の形や、
+   `IMGMOUNT A ... -t floppy -fs none` も試す価値がある
+
+#### 素材
+
+`.build/msdos/` に Disk1〜3 のイメージ、`.build/msime/` に展開済みの
+MSIME と DOS/V ドライバ一式（どちらも gitignore 済み。MS-DOS は
+Microsoft の商用ソフトなので公開リポジトリには置けない）。
+
 ### WXP の同梱経路は残してある
 
 `[devices]` から読み込む経路（`fepInstalled()` が真のとき）はそのまま。
