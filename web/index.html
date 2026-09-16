@@ -153,11 +153,6 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 		<input type="file" id="fep-file" multiple accept=".lzh">
 		<span id="fep-state" class="off">未導入</span>
 	</span>
-	<span>
-		<label for="dos-file" title="お手持ちの MS-DOS 5.0/V のディスクイメージ">MS-DOS</label>
-		<input type="file" id="dos-file" accept=".zip">
-		<span id="dos-state" class="off">未導入</span>
-	</span>
 	<button id="fep-key" disabled title="選んだキーをエミュレータへ直接送ります">かな漢字 ON/OFF</button>
 	<select id="fep-trigger" disabled title="FEP の起動キー">
 		<option value="AltRight">右 Alt</option>
@@ -273,32 +268,6 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			ブラウザや OS に <kbd>Alt</kbd> を横取りされる環境でも確実に届きます。
 			効くものが見つかったらキーボードから直接押しても構いません。
 			なお JW_CAD は左 <kbd>Alt</kbd> を <kbd>GRPH</kbd> として使うので、そこは避けてください。
-		</p>
-
-		<h2>お手持ちの MS-DOS を使う場合（任意）</h2>
-		<p>
-			上の <strong>MS-DOS</strong> 欄に、お手持ちの <strong>MS-DOS 5.0/V</strong> の
-			ディスクイメージを固めた zip を入れると、DOSBox-X 内蔵の DOS ではなく
-			その MS-DOS を起動します。<strong>MSIME がエミュレータの中で動く</strong>ので、
-			JW_CAD の文字列入力欄でそのまま変換できます。ブラウザ側の入力欄は要りません。
-		</p>
-		<p>
-			MS-DOS は Microsoft の商用ソフトなので、ここでは<strong>一切配布していません</strong>。
-			使うのはあなたが持っているディスクイメージだけです。zip はそのまま入れてください
-			（ディスク 1 と 3 だけ使います）。一度入れればブラウザに保存されます。
-		</p>
-		<p>
-			起動ディスクの組み立てはページの中で完結します。ブラウザがやるのは zip の展開と、
-			イメージを 1,474,560 バイトに詰めることだけです
-			（出回っているイメージは末尾が切られている一方で BPB は 1.44MB と申告するため、
-			そのままでは <code>Non-System disk</code> になります）。
-			FAT の読み書きは DOSBox-X の DOS が <code>IMGMOUNT</code> と <code>COPY</code> で、
-			圧縮された <code>.SY_</code> の展開は MS-DOS 自身の <code>EXPAND.EXE</code> が行います。
-		</p>
-		<p>
-			引き換えに<strong>起動は遅くなります</strong>。DOS/V のフォントとドライバを
-			読み込むぶん、内蔵 DOS よりかなり待たされます。
-			MS-DOS を入れていない状態が既定で、そちらは今までどおりです。
 		</p>
 
 		<h2>これは何か</h2>
