@@ -199,6 +199,78 @@ ON 設定の固まりかたは、呼ぶ文脈を変えても同じだった:
   `wxpon.asm` ON 設定だけを実行 /
   `keyspy.asm` INT 15h AH=4Fh に来たスキャンコードを表示
 
+### MS-DOS 5.0/V の MSIME を使う試み — こちらも行き止まり（2026-09-16）
+
+WXP が駄目だったので、MS-DOS 5.0/V 付属の **MSIME** を試した。
+**FEP としては正しい相手だが、DOSBox-X の内蔵 DOS 上では動かない。**
+
+#### なぜ MSIME なら見込みがあったか
+
+JW_CADV.EXE が FEP 検出に使うデバイス名リストには `MS$KANJI` が入っている。
+そして MSIME のデバイスヘッダを読むと:
+
+| ファイル | 属性 | デバイス名 |
+|---|---|---|
+| `MSIMEK.SYS` | `c000` 文字デバイス | **`MS$KANJI`** |
+| `MSIMEI.SYS` | `c000` 文字デバイス | `MS IMEI$`（中に `$IAS` / `$IBMAIAS` の文字列あり） |
+
+つまり MSIME は MS-KANJI API を実装した**本物の DOS/V 用 FEP**で、
+JW_CAD が素直に検出できるはずだった。J-3100 用で `AISoft` を名乗る WXP とは
+根本的に違う。
+
+#### 何が起きたか
+
+`[devices]` から `DEVICE=C:\DOS\MSIMEK.SYS` で読ませると:
+
+```
+Device driver load area: segment 464-9f1a for driver 'C:\DOS\MSIMEK.SYS'
+Init device name 'MSIMEK.SYS'
+...
+ERROR CPU:Illegal Unhandled Interrupt Called 6      ← 以後ずっと繰り返し
+```
+
+ロードと初期化開始までは行くが、そこで**無効オペコード例外（INT 6）を
+延々と踏み続けて**止まる。DOS バージョンは関係ない（DOSBox-X は既定で
+5.0 を名乗る）。DOSBox-X の内蔵 DOS は MS-DOS そのものではないので、
+MSIME が前提にしている DOS 内部構造か DOS/V のデバイス
+（`$IBMAFNT` など）が噛み合っていないと思われる。
+
+#### 残っている道
+
+**本物の MS-DOS 5.0/V を起動する。** `IMGMOUNT` + `BOOT` でフロッピー
+イメージから起動すれば、MSIME は設計どおりの環境で動くはず。ただし代償が
+大きい:
+
+- 実 DOS を起動するとホストディレクトリの `MOUNT C /work` が使えない。
+  JW_CAD もファイルパネルもディスクイメージの中に移す必要がある
+  （np2_wasm が実際にやっている方式なので、前例はある）
+- 現在の「C: が IDBFS、ファイルパネルで出し入れ」という構成は作り直しになる
+
+#### 素材の扱い（重要）
+
+MS-DOS 5.0/V は **Microsoft の商用ソフトで著作権が生きている**。
+JW_CAD（再配布明示許可）や WXP（フリーウェア）とは性質が違い、
+**公開リポジトリには一切入れられない。** 検証に使ったファイルは
+`.build/msime/`（gitignore 済み）にのみ置いた。
+
+利用者が自分の手持ちを持ち込む形なら、WXP と同じくブラウザ内 (IndexedDB)
+に留まり外には出ない。
+
+#### 手順のメモ（再挑戦するとき）
+
+配布イメージは `Disk1.IMG` 〜 `Disk3.IMG`。MSIME 一式は **Disk3**。
+インストールディスクなので拡張子末尾が `_` の SZDD 圧縮。
+
+```sh
+apt install mtools mscompress
+mcopy -i Disk3.IMG ::MSIMEK.SY_ .        # 取り出し
+msexpand < MSIMEK.SY_ > MSIMEK.SYS       # 展開
+```
+
+`MSIMEK.SYS` の既定辞書パスは `C:\MSIME.DIC` と `C:\MSIMER.DIC`
+（ファイル内の文字列で確認）。EMS があればそこに辞書を置き、無ければ
+メインメモリにフォールバックする。
+
 ### WXP の同梱経路は残してある
 
 `[devices]` から読み込む経路（`fepInstalled()` が真のとき）はそのまま。
