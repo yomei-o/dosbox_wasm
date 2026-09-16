@@ -289,20 +289,18 @@ msexpand < MSIMEK.SY_ > MSIMEK.SYS       # 展開
 （ファイル内の文字列で確認）。EMS があればそこに辞書を置き、無ければ
 メインメモリにフォールバックする。
 
-### 本物の MS-DOS 5.0/V を起動する試み — 途中（2026-09-16）
+### 本物の MS-DOS 5.0/V を起動する試み — ブートまで到達（2026-09-16）
 
-MSIME が内蔵 DOS で動かないので、実 DOS を起動する路線を試した。
-**ブートの受け渡しまでは到達したが、画面が出ない。**
+MSIME が内蔵 DOS で動かないので実 DOS 路線を試した。
+**ブートセクタの実行までは成功。IO.SYS のロード中で止まっている。**
 
-#### まず踏んだ地雷: emscripten は C++ 例外を消す
+#### 地雷1: emscripten は C++ 例外を消す
 
-`BOOT` した瞬間にプログラムが死んで画面が真っ暗になる。原因は
-DOSBox-X が**マシン再起動を `throw int(8)` で実装している**こと
-（`src/dos/dos_programs.cpp` の 2337 / 2618 / 3491 行）。
-一方 **emscripten は既定で `-fignore-exceptions` でコンパイルする**ので、
-例外機構が無く `throw` がそのままトラップになる。
-
-JW_CAD 用の構成では BOOT を通らないので今まで表に出なかった。
+`BOOT` した瞬間にプログラムごと死んで画面が真っ暗になった。DOSBox-X は
+**マシン再起動を `throw int(8)` で実装している**（`src/dos/dos_programs.cpp`
+2337 / 2618 / 3491 行）のに対し、**emscripten は既定で `-fignore-exceptions`
+でコンパイルする**ため、`throw` がそのままトラップになる。
+JW_CAD の構成では BOOT を通らないので今まで表に出なかった。
 
 修正はビルドフラグだけ:
 
@@ -313,53 +311,72 @@ LDFLAGS  += -fexceptions -sDISABLE_EXCEPTION_CATCHING=0
 ```
 
 `CXXFLAGS` が変わるので configure からやり直し（フルビルド）。
-これで死ななくなり、ページも生きたまま BOOT を通過するようになった。
-**例外有効版は `.build/exc/` に置いてある**（`web/` の本番ビルドは
-例外無効のまま。JW_CAD 側には不要なので）。
+**例外有効版は `.build/exc/` に置いてある**（`web/` の本番は例外無効のまま。
+JW_CAD には不要なので）。
 
-#### 現状: ブートは渡るが画面が出ない
+#### 地雷2: 配布イメージがトリムされている
+
+例外を直しても `Non-System disk or disk error` になる。原因はイメージの
+サイズ:
+
+| | 実サイズ | セクタ数 | BPB の申告 |
+|---|---|---|---|
+| Disk1.IMG | 1,155,072 | 2,256 | **2,880**（1.44MB） |
+
+末尾の空きセクタを削った**トリム済みイメージ**なので、ブートセクタが
+後方セクタを読むと失敗する。1,474,560 バイトまでゼロ埋めすれば直る:
+
+```sh
+dd if=/dev/zero bs=1 count=$((1474560 - $(stat -c%s Disk1.IMG))) >> Disk1_full.IMG
+```
+
+#### 現状: ブートセクタは動いた、その先で止まる
 
 ```
-IMGMOUNT A /work/Disk1.IMG -t floppy
+IMGMOUNT A /work/Disk1_full.IMG -t floppy    # MOUNT C は挟まない
 BOOT -l A
 ```
 
-トレースはここまで正常:
-
 ```
-FAT: BPB says 18 sectors/track 2 heads 512 bytes/sector
-Mounted FAT volume is FAT12 with 2847 clusters
-DIRCACHE: Set volume label to DISK      1
-...
-Mounted empty C/H/S/sz 80/2/18/512 1440KB      ← 気になる
-Booting guest OS stack_seg=0x0030 load_seg=0x07c0
+Loading 512 bytes of boot code to 7c00
+Dispatching VM event Guest OS Boot
+Alright: DOS kernel shutdown, booting a guest OS
+  CS:IP=0000:7c00 SS:SP=0030:0100 AX=0000 BX=7c00 CX=0001 DX=0000
 ```
 
-イメージは正しく読めていて（ボリュームラベル `DISK 1` まで見えている）、
-ブートセクタをロードしてゲストに制御を渡している。エラーも abort も無い。
-その後 DOSBox-X が喋らなくなるのは、ゲストに移れば当然なので異常ではない。
+ここまで完璧。ブートセクタが 0000:7C00 に載って実行が始まっている。
+その後 **CPU は `f000:cf45`（エミュレート BIOS 内）で完全に停止**し、
+画面は消去されたまま何も描かれない（非黒ピクセル 0）。
+つまりブートセクタは IO.SYS を見つけて読み始めたが、その途中で
+BIOS のどこかに入って戻ってこない。
 
-**しかし画面は最初から最後まで真っ暗。** 120秒待っても変化なし。
+#### 次に当たるところ
 
-#### 次に当たるべきところ
+1. `f000:cf45` が何なのかを特定する。DOSBox-X の BIOS 内なので、
+   その番地に何を置いたかはソースから追える。HLT ループなら何かの
+   割り込み待ち、無限ループなら未実装 BIOS 機能の可能性
+2. 機種設定を振る。`machine=svga_s3` / `cputype=pentium` で試している。
+   `vgaonly` や `cputype=386` も
+3. DOSBox-X 側に BIOS/INT のトレースを足す。`dosbox_x_cpu_probe` と
+   同じ要領でエクスポートを増やせばよい
 
-1. **`Mounted empty C/H/S/sz 80/2/18/512 1440KB`** — ブート直前に A: が
-   空の 1.44MB として再マウントされているように読める。`MOUNT C` を
-   外しても消えなかったので BOOT 自身の動作。空のドライブから起動して
-   いるなら画面が出ないのは当然。ここが第一容疑
-2. ゲストが本当に実行されているかの確認。CPU が進んでいるかを
-   DOSBox-X 側から観測する（`dosbox_x_mouse_probe` と同じ要領で
-   レジスタや実行カウンタを出すエクスポートを足せば分かる）
-3. 画面出力の経路。マシンリセットを挟んだ後に `output=surface` の
-   キャンバスが再初期化されているか
-4. `BOOT` の引数。`BOOT -l A` ではなく `BOOT /work/Disk1.IMG -l A` の形や、
-   `IMGMOUNT A ... -t floppy -fs none` も試す価値がある
+#### 計測用に足したもの
+
+`scripts/patch-dosbox-x.py` に `dosbox_x_cpu_probe` を追加した
+（CS:IP / pmode / cycles を返す）。**画面が真っ黒なとき、スクリーンショット
+では「CPU が止まった」のか「CPU は動いているが描画が来ていない」のかを
+区別できない。** この区別ができて初めて前に進めた。
+
+キャンバスのサイズと非黒ピクセル数も併せて見ること。DOSBox-X の
+テキストモードは 720×400 で描かれるので、640×400 のままなら
+シェル画面にすら到達していない。
 
 #### 素材
 
-`.build/msdos/` に Disk1〜3 のイメージ、`.build/msime/` に展開済みの
-MSIME と DOS/V ドライバ一式（どちらも gitignore 済み。MS-DOS は
-Microsoft の商用ソフトなので公開リポジトリには置けない）。
+`.build/msdos/` に Disk1〜3（と `_full` のパディング済み）、
+`.build/msime/` に展開済み MSIME と DOS/V ドライバ一式。
+どちらも gitignore 済み。MS-DOS は Microsoft の商用ソフトなので
+公開リポジトリには置けない。
 
 ### WXP の同梱経路は残してある
 

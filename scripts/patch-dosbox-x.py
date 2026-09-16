@@ -143,12 +143,33 @@ extern "C" EMSCRIPTEN_KEEPALIVE float *dosbox_x_mouse_probe(void) {
 #endif
 """
 
+# After BOOT hands control to a guest OS the screen goes black and stays that
+# way, with no error logged. A blank canvas cannot distinguish "the CPU stopped"
+# from "the CPU is fine but nothing is reaching the canvas", so report where the
+# emulated CPU actually is - sample it twice and see whether it moved.
+CPU_PROBE_NEW = PROBE_ANCHOR + """
+#if C_EMSCRIPTEN
+/* 0,1  CS:IP    2  protected mode    3  cycles left in this block */
+static uint32_t dosbox_x_cpu_probe_buf[8];
+
+extern "C" EMSCRIPTEN_KEEPALIVE uint32_t *dosbox_x_cpu_probe(void) {
+    uint32_t *b = dosbox_x_cpu_probe_buf;
+    b[0] = (uint32_t)SegValue(cs);
+    b[1] = (uint32_t)reg_eip;
+    b[2] = (uint32_t)(cpu.pmode ? 1 : 0);
+    b[3] = (uint32_t)CPU_Cycles;
+    return b;
+}
+#endif
+"""
+
 EDITS = [
     ("src/gui/sdlmain.cpp", JOYSTICK_OLD, JOYSTICK_NEW),
     ("src/gui/sdlmain.cpp", CDROM_OLD, CDROM_NEW),
     ("src/gui/sdlmain.cpp", TYPE_ANCHOR, TYPE_NEW),
     ("src/ints/mouse.cpp", MOUSE_POS_ANCHOR, MOUSE_POS_NEW),
     ("src/gui/sdlmain.cpp", PROBE_ANCHOR, PROBE_NEW),
+    ("src/gui/sdlmain.cpp", PROBE_ANCHOR, CPU_PROBE_NEW),
 ]
 
 
