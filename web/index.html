@@ -207,12 +207,21 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<tr><td><kbd>Home</kbd></td><td>JW_CAD の <kbd>HOME/CLR</kbd></td></tr>
 		</table>
 
-		<h2>日本語入力</h2>
+		<h2>日本語入力 — 文字を書き込む手順</h2>
+		<ol>
+			<li>右メニューの <strong>文 字</strong>（キーは <kbd>A</kbd>）を選ぶ</li>
+			<li>図面上の書きたい位置をクリックする</li>
+			<li>画面の上に <strong>文字列入力</strong> と緑のカーソルが出る</li>
+			<li><strong>ここでページ上部の「日本語入力」欄をクリックし</strong>、
+				いつもの IME で日本語を打って <kbd>Enter</kbd></li>
+			<li>変換した文字列が <strong>文字列入力</strong> に入る。
+				もう一度 <kbd>Enter</kbd> で確定し、置く位置をクリック</li>
+		</ol>
 		<p>
-			画面上部の <strong>日本語入力</strong> 欄に、<strong>ブラウザの IME でそのまま</strong>
-			打ち込んで <kbd>Enter</kbd> を押してください。確定した文字列が Shift_JIS に変換され、
-			JW_CAD のキーボードバッファへ直接送られます。DOS の FEP は要りません。
-			JW_CAD 側で文字入力の状態（<code>文字</code> コマンドなど）にしてから送ってください。
+			<strong>かな漢字変換はブラウザの IME が行います。</strong>DOS 側の FEP は要りません。
+			確定した文字列が Shift_JIS に変換され、JW_CAD のキーボードバッファへ直接送られます。
+			JW_CAD の画面に直接タイプしても日本語は打てません（DOS には FEP がないため）。
+			かならず上の欄を経由してください。
 		</p>
 		<p>
 			DOSBox-X はもともと、ホストの IME で打った文字をゲストのコードページに変換して

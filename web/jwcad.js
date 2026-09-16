@@ -39,6 +39,19 @@ function trace(s) {
 	} catch { /* the trace is best effort */ }
 }
 
+// SDL2's Emscripten backend listens for keys on the window, so anything typed
+// into the Japanese input field would also reach DOS and fire JW_CAD commands.
+// Registered here, at module scope, this runs before dosbox-x.js is appended
+// and therefore before SDL's own listener, so it can stop the event dead.
+for (const type of ['keydown', 'keyup', 'keypress']) {
+	window.addEventListener(type, (ev) => {
+		const el = document.activeElement;
+		if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) {
+			ev.stopImmediatePropagation();
+		}
+	}, true);
+}
+
 function setStatus(text, isError) {
 	statusEl.textContent = text;
 	statusEl.classList.toggle('err', !!isError);
