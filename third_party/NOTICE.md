@@ -1,7 +1,8 @@
 # 同梱物と出典
 
-このディレクトリのファイルは第三者の著作物です。いずれも**無改変の配布書庫のまま**置いてあり、
-ブラウザ側 (`web/lzh.js` + `web/lzh.wasm`) で展開しています。
+このディレクトリのファイルは第三者の著作物です。いずれも**無改変の配布書庫のまま**置いてあります。
+DOS 側で使うものはブラウザ側 (`web/lzh.js` + `web/lzh.wasm`) で展開し、
+ビルドに使うソース書庫はそのまま保管しています。
 
 ---
 
@@ -71,17 +72,30 @@ Vector で公開されているフリーソフトウェアです。書庫内 `WX
 | [DOSBox-X](https://github.com/joncampbell123/dosbox-x) | GPL-2.0 | エミュレータ本体 |
 | [lhasa](https://github.com/fragglet/lhasa) | ISC | LZH 展開 (`web/lzh.wasm`) |
 
+ビルド元のコミットは `scripts/build-wasm.sh` の先頭に固定してあります。
+「その時点の最新」を取るのをやめたのは、配信しているバイナリがどのソースから
+作られたかを特定できるようにするためです。
+
+**DOSBox-X は GPL-2.0** なので、`web/dosbox-x.wasm` もその条件で配布されます。
+対応するソースは **コミット `145d6a1`**（2026-09-13）に、このリポジトリの
+`scripts/patch-dosbox-x.py` を適用したものです。ソース一式は 137MB あり
+GitHub の単一ファイル上限を超えるため同梱していません。上記のコミットと
+パッチスクリプトで同じものが再現できます。
+
 ---
 
 ## `web/pdf.wasm` — libharu
 
 * 著作権: Copyright (C) 1999-2006 Takeshi Kanno / 2007-2009 Antony Dovgal
 * 入手元: <https://github.com/libharu/libharu>
+* ビルド元: コミット `3467749fd1c0ab6ca6ed424d053b1ea53c1bf67c`（2026-03-26）。
+  **そのソースを `third_party/libharu-3467749.zip` として同梱しています**
 * ライセンス: zlib/libpng 系（改変・再配布・商用利用可。改変版はその旨を明示し、
   原著作者の表示を除去しないこと）
 
-図面を PDF で書き出すために使っています。ソースは同梱せず、`scripts/build-wasm.sh pdf`
-が取得してビルドします（薄いラッパーは `src/pdfwasm/pdfwasm.c`）。
+図面を PDF で書き出すために使っています。`scripts/build-wasm.sh pdf` が上記の
+コミットを取得してビルドします（薄いラッパーは `src/pdfwasm/pdfwasm.c`）。
+同梱の zip はそのコミットの書庫そのもので、上流が消えても作り直せるようにしてあります。
 
 日本語は **PDF 標準の CJK エンコーディング `90ms-RKSJ-H`** で出力しており、
 フォントは埋め込んでいません。プロッタ出力の文字がシフトJISのまま渡せるうえ、

@@ -35,6 +35,26 @@ NICE=${NICE:-"nice -n 19"}
 
 mkdir -p "$BUILD" "$WEB"
 
+# The exact upstream revisions these binaries are built from. Bump deliberately,
+# not by drifting: a shipped .wasm has to be traceable to a source tree.
+DOSBOX_X_REV=${DOSBOX_X_REV:-145d6a1}
+LIBHARU_REV=${LIBHARU_REV:-3467749fd1c0ab6ca6ed424d053b1ea53c1bf67c}
+LHASA_REV=${LHASA_REV:-master}
+
+# Clone at a revision. A shallow clone cannot be checked out to an arbitrary
+# commit, so fetch that one commit directly.
+fetch_at() {
+	url=$1; dir=$2; rev=$3
+	if [ ! -d "$dir/.git" ]; then
+		mkdir -p "$dir"
+		git -C "$dir" init -q
+		git -C "$dir" remote add origin "$url"
+	fi
+	git -C "$dir" fetch -q --depth 1 origin "$rev"
+	git -C "$dir" checkout -q FETCH_HEAD
+	echo "    $(basename "$dir") at $(git -C "$dir" rev-parse --short HEAD)"
+}
+
 # ---------------------------------------------------------------- toolchain
 # emsdk_env.sh is avoided on purpose: it probes for `python` on PATH, and some
 # systems answer that probe with something that is not a working Python.
@@ -74,7 +94,7 @@ want=${1:-all}
 # ------------------------------------------------------------------- lhasa
 build_lzh() {
 	L=$BUILD/lhasa
-	[ -d "$L/.git" ] || git clone --depth 1 https://github.com/fragglet/lhasa "$L"
+	fetch_at https://github.com/fragglet/lhasa "$L" "$LHASA_REV"
 	lib=$L/lib
 	echo "==> building lzh.wasm"
 	# bit_stream_reader.c, lh_new_decoder.c, pma_common.c and tree_decode.c are
@@ -105,7 +125,7 @@ build_lzh() {
 # hand in JavaScript.
 build_pdf() {
 	H=$BUILD/haru
-	[ -d "$H/.git" ] || git clone --depth 1 https://github.com/libharu/libharu "$H"
+	fetch_at https://github.com/libharu/libharu "$H" "$LIBHARU_REV"
 	# The config header only ever sets four optional flags; without zlib and
 	# libpng every one of them stays off, so an empty file is the whole config.
 	[ -f "$H/include/hpdf_config.h" ] || : > "$H/include/hpdf_config.h"
@@ -124,8 +144,7 @@ build_pdf() {
 # ---------------------------------------------------------------- DOSBox-X
 build_dosbox() {
 	D=${DOSBOX_X_SRC:-$BUILD/dosbox-x}
-	[ -d "$D/.git" ] || git clone --depth 1 \
-		https://github.com/joncampbell123/dosbox-x "$D"
+	fetch_at https://github.com/joncampbell123/dosbox-x "$D" "$DOSBOX_X_REV"
 	cd "$D"
 
 	echo "==> applying source fixes"
