@@ -753,24 +753,77 @@ function findPlotFiles() {
 	return out.sort((a, b) => b.mtime - a.mtime);
 }
 
-$('plot2svg').onclick = () => {
-	if (!FS) { setStatus('起動を待ってください。', true); return; }
+// Read the newest plot and turn it into SVG, which everything else is built on.
+function latestPlot() {
+	if (!FS) { setStatus('起動を待ってください。', true); return null; }
 	const found = findPlotFiles();
 	if (!found.length) {
 		setStatus('プロッタ出力が見つかりません。JW_CAD でプロッタ→ファイル出力してから押してください。', true);
-		return;
+		return null;
 	}
 	const pick = found[0];
+	// The stream carries Shift-JIS bytes for any Japanese text in the drawing.
+	const text = new TextDecoder('shift_jis').decode(FS.readFile(pick.path));
+	return { ...plotToSvg(text), name: pick.name.replace(/\.[^.]*$/, '') };
+}
+
+function offer(blob, filename) {
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(blob);
+	a.download = filename;
+	a.click();
+	setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+$('plot2svg').onclick = () => {
 	try {
-		// The stream carries Shift-JIS bytes for any Japanese text in the drawing.
-		const text = new TextDecoder('shift_jis').decode(FS.readFile(pick.path));
-		const { svg, lines, glyphs } = plotToSvg(text);
-		const a = document.createElement('a');
-		a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-		a.download = pick.name.replace(/\.[^.]*$/, '') + '.svg';
-		a.click();
-		setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-		setStatus(`${pick.name} を SVG にしました（線 ${lines} 本、文字 ${glyphs}）。`);
+		const r = latestPlot();
+		if (!r) return;
+		offer(new Blob([r.svg], { type: 'image/svg+xml' }), r.name + '.svg');
+		setStatus(`${r.name} を SVG にしました（線 ${r.lines} 本、文字 ${r.glyphs}）。`);
+	} catch (e) {
+		setStatus('変換できませんでした: ' + e.message, true);
+		console.error(e);
+	}
+};
+
+// The long edge, in pixels. Rasterising cost goes with the area, so a big
+// sheet at a high setting takes a while; the default is a readable compromise.
+const pngLongEdge = () => Number($('png-size').value) || 2400;
+
+$('plot2png').onclick = async () => {
+	try {
+		const r = latestPlot();
+		if (!r) return;
+		setStatus('PNG を作っています…');
+		const url = URL.createObjectURL(new Blob([r.svg], { type: 'image/svg+xml' }));
+		try {
+			const img = new Image();
+			await new Promise((resolve, reject) => {
+				img.onload = resolve;
+				img.onerror = () => reject(new Error('SVG を読めませんでした'));
+				img.src = url;
+			});
+			// The SVG carries its size in millimetres; scale off its aspect.
+			const ratio = img.naturalWidth && img.naturalHeight
+				? img.naturalWidth / img.naturalHeight : Math.SQRT2;
+			const edge = pngLongEdge();
+			const w = ratio >= 1 ? edge : Math.round(edge * ratio);
+			const h = ratio >= 1 ? Math.round(edge / ratio) : edge;
+			const c = document.createElement('canvas');
+			c.width = w;
+			c.height = h;
+			const g = c.getContext('2d');
+			g.fillStyle = '#fff';
+			g.fillRect(0, 0, w, h);
+			g.drawImage(img, 0, 0, w, h);
+			const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
+			if (!blob) throw new Error('PNG にできませんでした');
+			offer(blob, r.name + '.png');
+			setStatus(`${r.name} を PNG にしました（${w}×${h}、線 ${r.lines} 本、文字 ${r.glyphs}）。`);
+		} finally {
+			URL.revokeObjectURL(url);
+		}
 	} catch (e) {
 		setStatus('変換できませんでした: ' + e.message, true);
 		console.error(e);

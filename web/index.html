@@ -161,7 +161,16 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 		<option value="ControlLeft+Space">Ctrl + Space</option>
 		<option value="ShiftLeft+Space">Shift + Space</option>
 	</select>
-	<button id="plot2svg" title="プロッタ出力したファイルを SVG に変換します">図面を SVG に</button>
+	<span>
+		<label>図面の書き出し</label>
+		<button id="plot2png" title="プロッタ出力したファイルを PNG にします">PNG</button>
+		<select id="png-size" title="PNG の長辺のピクセル数">
+			<option value="1200">1200px</option>
+			<option value="2400" selected>2400px</option>
+			<option value="4000">4000px</option>
+		</select>
+		<button id="plot2svg" title="プロッタ出力したファイルを SVG にします">SVG</button>
+	</span>
 	<button id="restart">再起動</button>
 	<button id="save">保存</button>
 </header>
@@ -273,9 +282,10 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 
 		<h2>図面を SVG で取り出す</h2>
 		<p>
-			JW_CAD のプロッタ出力を受け取って SVG に変換します。線・円弧・点のほか、
-			<strong>文字は文字のまま</strong>取り出すので、ブラウザで印刷して PDF にすれば
-			検索もコピーもできます。
+			JW_CAD のプロッタ出力を受け取って <strong>PNG</strong> と <strong>SVG</strong> に
+			変換します。線・円弧・点のほか、SVG では<strong>文字は文字のまま</strong>入るので、
+			検索もコピーもできます。PNG は用紙の長辺のピクセル数を選べます（A1 なら 2400px でおよそ 72dpi）。
+			大きくすると読みやすくなりますが、書き出しに時間がかかります。
 		</p>
 		<p>
 			JW_CAD 側の手順です。上部のバーに <code>(L)</code> と書かれている項目は、
@@ -288,7 +298,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<li>「出力ファイル名 ?」に名前を入れて <kbd>Enter</kbd></li>
 			<li>設定画面 → 作図領域を左クリック（確定）</li>
 			<li>作図開始 → 作図領域を左クリック（実行）</li>
-			<li>上の <strong>図面を SVG に</strong> を押す</li>
+			<li>上の <strong>PNG</strong> か <strong>SVG</strong> を押す</li>
 		</ol>
 		<p>
 			<code>WASM.JWP</code> はこのページが用意しているプロッタ設定ファイルです。
@@ -314,7 +324,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 <!-- The query string is what makes a browser fetch the new script: the page
      and the script are separate files, and without it one can stay cached
      while the other updates, which fails as a missing element. -->
-<script type="module" src="jwcad.js?v=a5aa146-svg"></script>
+<script type="module" src="jwcad.js?v=cd6305e-png2"></script>
 
 </body>
 </html>
