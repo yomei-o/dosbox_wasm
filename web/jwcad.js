@@ -9,7 +9,7 @@
 // unmodified.
 
 import createLzh from './lzh.js';
-import { plotToSvg, plotToPdf, describe } from './plot.js';
+import { plotToSvg, plotToPdf, describe, bytesToChars } from './plot.js';
 import createPdf from './pdf.js';
 
 const JWCAD_LZH = '../third_party/jwcv222h.lzh';
@@ -643,9 +643,11 @@ function latestPlot() {
 		return null;
 	}
 	const pick = found[0];
-	// latin1 keeps every byte as it is; the writers decode the text themselves,
-	// because SVG wants characters and PDF wants the original Shift-JIS.
-	const text = new TextDecoder('latin1').decode(FS.readFile(pick.path));
+	// One character per byte; the writers decode the text themselves, because
+	// SVG wants characters and PDF wants the original Shift-JIS. Not
+	// TextDecoder('latin1') - that is windows-1252 and rewrites 0x80-0x9F,
+	// which is exactly where Shift-JIS lead bytes live.
+	const text = bytesToChars(FS.readFile(pick.path));
 	return { text, name: pick.name.replace(/\.[^.]*$/, '') };
 }
 

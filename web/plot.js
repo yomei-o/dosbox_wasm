@@ -19,10 +19,15 @@
 // Coordinates are in hundredths of a millimetre (unit_x/unit_y in the
 // definition), and the plotter's Y axis points up while SVG's points down.
 //
-// The stream is handed in decoded as latin1, which is to say not decoded at
-// all: every character is one byte of the original. Text has to stay as bytes
-// because PDF wants the Shift-JIS as it came, while SVG wants it as characters,
-// and a decode at read time would throw the bytes away.
+// The stream is handed in as a string whose every character is one byte of the
+// original. Text has to stay as bytes because PDF wants the Shift-JIS as it
+// came, while SVG wants it as characters, and a decode at read time would throw
+// the bytes away.
+//
+// Build that string with bytesToChars() below, never TextDecoder('latin1'):
+// the encoding standard maps the label "latin1" to windows-1252, which gives
+// 0x80-0x9F its own characters. Shift-JIS lead bytes are 0x81-0x9F, so every
+// double-byte character comes out corrupted while ASCII looks fine.
 
 const UNITS_PER_MM = 100;
 
@@ -43,9 +48,19 @@ const DASHES = {
 	8: [24, 6, 6, 6],
 };
 
-/** The bytes a latin1 string stands for. */
-export function bytesOf(latin1) {
-	return Uint8Array.from(latin1, (c) => c.charCodeAt(0) & 0xff);
+/** One character per byte, with no encoding applied. */
+export function bytesToChars(bytes) {
+	let out = '';
+	// In chunks, because apply() on a very large array overflows the stack.
+	for (let i = 0; i < bytes.length; i += 0x8000) {
+		out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+	}
+	return out;
+}
+
+/** The bytes such a string stands for. */
+export function bytesOf(chars) {
+	return Uint8Array.from(chars, (c) => c.charCodeAt(0) & 0xff);
 }
 
 /** Those bytes read as Shift-JIS, which is what the plot carries. */
