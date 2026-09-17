@@ -70,3 +70,20 @@ Vector で公開されているフリーソフトウェアです。書庫内 `WX
 |---|---|---|
 | [DOSBox-X](https://github.com/joncampbell123/dosbox-x) | GPL-2.0 | エミュレータ本体 |
 | [lhasa](https://github.com/fragglet/lhasa) | ISC | LZH 展開 (`web/lzh.wasm`) |
+
+---
+
+## `web/pdf.wasm` — libharu
+
+* 著作権: Copyright (C) 1999-2006 Takeshi Kanno / 2007-2009 Antony Dovgal
+* 入手元: <https://github.com/libharu/libharu>
+* ライセンス: zlib/libpng 系（改変・再配布・商用利用可。改変版はその旨を明示し、
+  原著作者の表示を除去しないこと）
+
+図面を PDF で書き出すために使っています。ソースは同梱せず、`scripts/build-wasm.sh pdf`
+が取得してビルドします（薄いラッパーは `src/pdfwasm/pdfwasm.c`）。
+
+日本語は **PDF 標準の CJK エンコーディング `90ms-RKSJ-H`** で出力しており、
+フォントは埋め込んでいません。プロッタ出力の文字がシフトJISのまま渡せるうえ、
+数MBのフォントを同梱せずに済みます。表示にはリーダー側の日本語フォントを使います。
+

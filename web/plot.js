@@ -18,6 +18,11 @@
 //
 // Coordinates are in hundredths of a millimetre (unit_x/unit_y in the
 // definition), and the plotter's Y axis points up while SVG's points down.
+//
+// The stream is handed in decoded as latin1, which is to say not decoded at
+// all: every character is one byte of the original. Text has to stay as bytes
+// because PDF wants the Shift-JIS as it came, while SVG wants it as characters,
+// and a decode at read time would throw the bytes away.
 
 const UNITS_PER_MM = 100;
 
@@ -38,13 +43,26 @@ const DASHES = {
 	8: [24, 6, 6, 6],
 };
 
+/** The bytes a latin1 string stands for. */
+export function bytesOf(latin1) {
+	return Uint8Array.from(latin1, (c) => c.charCodeAt(0) & 0xff);
+}
+
+/** Those bytes read as Shift-JIS, which is what the plot carries. */
+export function decodeSjis(latin1) {
+	return new TextDecoder('shift_jis').decode(bytesOf(latin1));
+}
+
 const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /**
+ * Read the stream into shapes. Everything downstream - SVG, PDF - works from
+ * this, so the stream is only ever understood in one place.
+ *
  * @param {string} text  the plot stream, already decoded from Shift-JIS
- * @returns {{svg: string, lines: number, glyphs: number}}
+ * @returns {{bounds: object, paths: Array, arcs: Array, points: Array, runs: Array, glyphs: number}}
  */
-export function plotToSvg(text) {
+export function parsePlot(text) {
 	let bounds = null;
 	let pen = 1;
 	let type = 1;
@@ -115,8 +133,6 @@ export function plotToSvg(text) {
 	closeRun();
 
 	if (!bounds) bounds = { minX: 0, minY: 0, maxX: 42050, maxY: 29700, paper: '' };
-	const w = bounds.maxX - bounds.minX;
-	const h = bounds.maxY - bounds.minY;
 
 	// One character at a time is what the plotter emits; join the ones that sit
 	// on the same baseline at the same size, so the PDF carries words rather
@@ -131,6 +147,22 @@ export function plotToSvg(text) {
 		if (sameLine) { last.ch += t.ch; last.endX = t.x + t.sx; }
 		else runs.push({ ...t, endX: t.x + t.sx });
 	}
+
+	return { bounds, paths, arcs, points, runs, glyphs: texts.length };
+}
+
+export const UNITS = UNITS_PER_MM;
+export const PENS = PEN_COLOURS;
+export const DASH_PATTERNS = DASHES;
+
+/**
+ * @param {string} text  the plot stream, already decoded from Shift-JIS
+ * @returns {{svg: string, lines: number, glyphs: number}}
+ */
+export function plotToSvg(text) {
+	const { bounds, paths, arcs, points, runs, glyphs } = parsePlot(text);
+	const w = bounds.maxX - bounds.minX;
+	const h = bounds.maxY - bounds.minY;
 
 	const out = [];
 	const stroke = (o) => {
@@ -180,7 +212,7 @@ export function plotToSvg(text) {
 			out.push(
 				`<text transform="${tf}" fill="${fill}" font-size="${t.sy}"` +
 				` font-family="sans-serif" textLength="${Math.max(t.endX - t.x, t.sx)}"` +
-				` lengthAdjust="spacingAndGlyphs">${esc(t.ch)}</text>`
+				` lengthAdjust="spacingAndGlyphs">${esc(decodeSjis(t.ch))}</text>`
 			);
 		}
 	}
@@ -190,6 +222,77 @@ export function plotToSvg(text) {
 	return {
 		svg: out.join('\n'),
 		lines: paths.reduce((a, p) => a + p.pts.length - 1, 0),
-		glyphs: texts.length,
+		glyphs,
 	};
+}
+
+/**
+ * Write the plot as a PDF, through libharu compiled to wasm (web/pdf.js).
+ *
+ * Text goes in as the Shift-JIS bytes the plot carried, against PDF's standard
+ * 90ms-RKSJ-H encoding, so it stays real text without a font being embedded.
+ *
+ * @param {string} text  the plot stream, decoded as latin1
+ * @param {object} mod   the instantiated pdf.wasm module
+ * @returns {{pdf: Uint8Array, lines: number, glyphs: number}}
+ */
+export function plotToPdf(text, mod) {
+	const { bounds, paths, arcs, points, runs, glyphs } = parsePlot(text);
+	const mm = (v) => v / UNITS_PER_MM;
+	const w = bounds.maxX - bounds.minX;
+	const h = bounds.maxY - bounds.minY;
+
+	// The page's origin sits at the drawing's lower left corner.
+	const px = (x) => mm(x - bounds.minX);
+	const py = (y) => mm(y - bounds.minY);
+
+	const rgb = (pen) => {
+		const hex = PEN_COLOURS[pen] || PEN_COLOURS[0];
+		return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+	};
+
+	if (mod._pdf_begin(mm(w), mm(h)) !== 0) throw new Error('PDF を開始できませんでした');
+	try {
+		mod._pdf_width(0.2);
+		for (const p of paths) {
+			mod._pdf_color(...rgb(p.pen));
+			const d = DASHES[p.type];
+			mod._pdf_dash(d ? d[0] : 0, d ? d[1] : 0);
+			mod._pdf_move(px(p.pts[0][0]), py(p.pts[0][1]));
+			for (let i = 1; i < p.pts.length; i++) mod._pdf_line(px(p.pts[i][0]), py(p.pts[i][1]));
+			mod._pdf_stroke();
+		}
+		for (const a of arcs) {
+			mod._pdf_color(...rgb(a.pen));
+			const d = DASHES[a.type];
+			mod._pdf_dash(d ? d[0] : 0, d ? d[1] : 0);
+			mod._pdf_arc(px(a.cx), py(a.cy), mm(a.r), a.a1, a.a2);
+		}
+		mod._pdf_dash(0, 0);
+		for (const p of points) {
+			mod._pdf_color(...rgb(p.pen));
+			mod._pdf_dot(px(p.x), py(p.y), 0.3);
+		}
+		for (const t of runs) {
+			mod._pdf_color(...rgb(t.pen));
+			// The bytes, with a terminator, straight into the module's memory.
+			const bytes = bytesOf(t.ch);
+			const ptr = mod._malloc(bytes.length + 1);
+			try {
+				mod.HEAPU8.set(bytes, ptr);
+				mod.HEAPU8[ptr + bytes.length] = 0;
+				mod._pdf_text(px(t.x), py(t.y), mm(t.sy), t.ang, ptr);
+			} finally {
+				mod._free(ptr);
+			}
+		}
+
+		const len = mod._pdf_end();
+		if (len <= 0) throw new Error('PDF を書き出せませんでした');
+		const at = mod._pdf_data();
+		const pdf = mod.HEAPU8.slice(at, at + len);
+		return { pdf, lines: paths.reduce((a, p) => a + p.pts.length - 1, 0), glyphs };
+	} finally {
+		mod._pdf_release();
+	}
 }

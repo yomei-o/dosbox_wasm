@@ -11,7 +11,8 @@
 // user drops in.
 
 import createLzh from './lzh.js';
-import { plotToSvg } from './plot.js';
+import { plotToSvg, plotToPdf } from './plot.js';
+import createPdf from './pdf.js';
 
 const JWCAD_LZH = '../third_party/jwcv222h.lzh';
 const WXPDOSV_LZH = '../third_party/wxpdosv4.lzh';
@@ -762,9 +763,10 @@ function latestPlot() {
 		return null;
 	}
 	const pick = found[0];
-	// The stream carries Shift-JIS bytes for any Japanese text in the drawing.
-	const text = new TextDecoder('shift_jis').decode(FS.readFile(pick.path));
-	return { ...plotToSvg(text), name: pick.name.replace(/\.[^.]*$/, '') };
+	// latin1 keeps every byte as it is; the writers decode the text themselves,
+	// because SVG wants characters and PDF wants the original Shift-JIS.
+	const text = new TextDecoder('latin1').decode(FS.readFile(pick.path));
+	return { text, name: pick.name.replace(/\.[^.]*$/, '') };
 }
 
 function offer(blob, filename) {
@@ -779,8 +781,9 @@ $('plot2svg').onclick = () => {
 	try {
 		const r = latestPlot();
 		if (!r) return;
-		offer(new Blob([r.svg], { type: 'image/svg+xml' }), r.name + '.svg');
-		setStatus(`${r.name} を SVG にしました（線 ${r.lines} 本、文字 ${r.glyphs}）。`);
+		const { svg, lines, glyphs } = plotToSvg(r.text);
+		offer(new Blob([svg], { type: 'image/svg+xml' }), r.name + '.svg');
+		setStatus(`${r.name} を SVG にしました（線 ${lines} 本、文字 ${glyphs}）。`);
 	} catch (e) {
 		setStatus('変換できませんでした: ' + e.message, true);
 		console.error(e);
@@ -796,7 +799,8 @@ $('plot2png').onclick = async () => {
 		const r = latestPlot();
 		if (!r) return;
 		setStatus('PNG を作っています…');
-		const url = URL.createObjectURL(new Blob([r.svg], { type: 'image/svg+xml' }));
+		const { svg, lines, glyphs } = plotToSvg(r.text);
+		const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
 		try {
 			const img = new Image();
 			await new Promise((resolve, reject) => {
@@ -820,10 +824,27 @@ $('plot2png').onclick = async () => {
 			const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
 			if (!blob) throw new Error('PNG にできませんでした');
 			offer(blob, r.name + '.png');
-			setStatus(`${r.name} を PNG にしました（${w}×${h}、線 ${r.lines} 本、文字 ${r.glyphs}）。`);
+			setStatus(`${r.name} を PNG にしました（${w}×${h}、線 ${lines} 本、文字 ${glyphs}）。`);
 		} finally {
 			URL.revokeObjectURL(url);
 		}
+	} catch (e) {
+		setStatus('変換できませんでした: ' + e.message, true);
+		console.error(e);
+	}
+};
+
+let pdfModule = null;
+
+$('plot2pdf').onclick = async () => {
+	try {
+		const r = latestPlot();
+		if (!r) return;
+		setStatus('PDF を作っています…');
+		if (!pdfModule) pdfModule = await createPdf();
+		const { pdf, lines, glyphs } = plotToPdf(r.text, pdfModule);
+		offer(new Blob([pdf], { type: 'application/pdf' }), r.name + '.pdf');
+		setStatus(`${r.name} を PDF にしました（線 ${lines} 本、文字 ${glyphs}）。`);
 	} catch (e) {
 		setStatus('変換できませんでした: ' + e.message, true);
 		console.error(e);

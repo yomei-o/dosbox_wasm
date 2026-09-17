@@ -170,6 +170,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<option value="4000">4000px</option>
 		</select>
 		<button id="plot2svg" title="プロッタ出力したファイルを SVG にします">SVG</button>
+		<button id="plot2pdf" title="プロッタ出力したファイルを PDF にします">PDF</button>
 	</span>
 	<button id="restart">再起動</button>
 	<button id="save">保存</button>
@@ -282,9 +283,10 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 
 		<h2>図面を SVG で取り出す</h2>
 		<p>
-			JW_CAD のプロッタ出力を受け取って <strong>PNG</strong> と <strong>SVG</strong> に
-			変換します。線・円弧・点のほか、SVG では<strong>文字は文字のまま</strong>入るので、
-			検索もコピーもできます。PNG は用紙の長辺のピクセル数を選べます（A1 なら 2400px でおよそ 72dpi）。
+			JW_CAD のプロッタ出力を受け取って <strong>PNG</strong> / <strong>SVG</strong> /
+			<strong>PDF</strong> に変換します。線・円弧・点のほか、SVG と PDF では
+			<strong>文字は文字のまま</strong>入るので、検索もコピーもできます。
+			PDF の日本語は標準の CJK エンコーディングを使うので、フォントを埋め込まずに済みます。PNG は用紙の長辺のピクセル数を選べます（A1 なら 2400px でおよそ 72dpi）。
 			大きくすると読みやすくなりますが、書き出しに時間がかかります。
 		</p>
 		<p>
@@ -298,7 +300,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<li>「出力ファイル名 ?」に名前を入れて <kbd>Enter</kbd></li>
 			<li>設定画面 → 作図領域を左クリック（確定）</li>
 			<li>作図開始 → 作図領域を左クリック（実行）</li>
-			<li>上の <strong>PNG</strong> か <strong>SVG</strong> を押す</li>
+			<li>上の <strong>PNG</strong> / <strong>SVG</strong> / <strong>PDF</strong> を押す</li>
 		</ol>
 		<p>
 			<code>WASM.JWP</code> はこのページが用意しているプロッタ設定ファイルです。
@@ -324,7 +326,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 <!-- The query string is what makes a browser fetch the new script: the page
      and the script are separate files, and without it one can stay cached
      while the other updates, which fails as a missing element. -->
-<script type="module" src="jwcad.js?v=cd6305e-png2"></script>
+<script type="module" src="jwcad.js?v=fb1556f-pdf"></script>
 
 </body>
 </html>

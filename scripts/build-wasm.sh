@@ -4,13 +4,14 @@
 #
 #   web/dosbox-x.js / .wasm   DOSBox-X with DOS/V (Japanese) emulation
 #   web/lzh.js     / .wasm    lhasa, for unpacking the .lzh archives in the browser
+#   web/pdf.js     / .wasm    libharu, for writing a plot out as PDF
 #
 # Needs a POSIX environment with autotools (DOSBox-X uses autoconf/automake) and
 # the Emscripten SDK. On Windows, WSL works; MSYS2/Git Bash does not, because
 # emcc does not cope with its path translation.
 #
 # Usage:
-#   scripts/build-wasm.sh [dosbox|lzh]     (default: both)
+#   scripts/build-wasm.sh [dosbox|lzh|pdf]   (default: all)
 #
 # Environment:
 #   EMSDK           existing emsdk installation to use
@@ -97,6 +98,29 @@ build_lzh() {
 	ls -l "$WEB"/lzh.js "$WEB"/lzh.wasm
 }
 
+# ------------------------------------------------------------------ libharu
+# A plot carries its text as Shift-JIS, and PDF's standard 90ms-RKSJ-H encoding
+# takes those bytes as they are, so Japanese comes out as real text with no
+# font embedded. That is why this is libharu rather than something written by
+# hand in JavaScript.
+build_pdf() {
+	H=$BUILD/haru
+	[ -d "$H/.git" ] || git clone --depth 1 https://github.com/libharu/libharu "$H"
+	# The config header only ever sets four optional flags; without zlib and
+	# libpng every one of them stays off, so an empty file is the whole config.
+	[ -f "$H/include/hpdf_config.h" ] || : > "$H/include/hpdf_config.h"
+
+	echo "==> building pdf.wasm"
+	$NICE emcc -O2 -I"$H/include" \
+		"$ROOT/src/pdfwasm/pdfwasm.c" "$H"/src/*.c \
+		-o "$WEB/pdf.js" \
+		-sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createPdf \
+		-sEXPORTED_FUNCTIONS='["_pdf_begin","_pdf_color","_pdf_width","_pdf_dash","_pdf_move","_pdf_line","_pdf_stroke","_pdf_arc","_pdf_dot","_pdf_text","_pdf_end","_pdf_data","_pdf_release","_malloc","_free"]' \
+		-sEXPORTED_RUNTIME_METHODS='["HEAPU8","stringToUTF8","lengthBytesUTF8"]' \
+		-sALLOW_MEMORY_GROWTH=1 -sFILESYSTEM=0 -sENVIRONMENT=web,node
+	ls -l "$WEB"/pdf.js "$WEB"/pdf.wasm
+}
+
 # ---------------------------------------------------------------- DOSBox-X
 build_dosbox() {
 	D=${DOSBOX_X_SRC:-$BUILD/dosbox-x}
@@ -142,9 +166,10 @@ build_dosbox() {
 
 case $want in
 	lzh) build_lzh ;;
+	pdf) build_pdf ;;
 	dosbox) build_dosbox ;;
-	all) build_lzh; build_dosbox ;;
-	*) echo "usage: $0 [dosbox|lzh]" >&2; exit 2 ;;
+	all) build_lzh; build_pdf; build_dosbox ;;
+	*) echo "usage: $0 [dosbox|lzh|pdf]" >&2; exit 2 ;;
 esac
 
 echo
