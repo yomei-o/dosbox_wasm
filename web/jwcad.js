@@ -9,7 +9,7 @@
 // unmodified.
 
 import createLzh from './lzh.js';
-import { plotToSvg, plotToPdf } from './plot.js';
+import { plotToSvg, plotToPdf, describe } from './plot.js';
 import createPdf from './pdf.js';
 
 const JWCAD_LZH = '../third_party/jwcv222h.lzh';
@@ -661,9 +661,9 @@ $('plot2svg').onclick = () => {
 	try {
 		const r = latestPlot();
 		if (!r) return;
-		const { svg, lines, glyphs } = plotToSvg(r.text);
+		const { svg, lines, glyphs, seen } = plotToSvg(r.text);
 		offer(new Blob([svg], { type: 'image/svg+xml' }), r.name + '.svg');
-		setStatus(`${r.name} を SVG にしました（線 ${lines} 本、文字 ${glyphs}）。`);
+		setStatus(`${r.name} を SVG にしました（線 ${lines} 本、文字 ${glyphs} / 出力の中身 ${describe(seen)}）。`);
 	} catch (e) {
 		setStatus('変換できませんでした: ' + e.message, true);
 		console.error(e);
@@ -679,7 +679,7 @@ $('plot2png').onclick = async () => {
 		const r = latestPlot();
 		if (!r) return;
 		setStatus('PNG を作っています…');
-		const { svg, lines, glyphs } = plotToSvg(r.text);
+		const { svg, lines, glyphs, seen } = plotToSvg(r.text);
 		const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
 		try {
 			const img = new Image();
@@ -704,7 +704,7 @@ $('plot2png').onclick = async () => {
 			const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
 			if (!blob) throw new Error('PNG にできませんでした');
 			offer(blob, r.name + '.png');
-			setStatus(`${r.name} を PNG にしました（${w}×${h}、線 ${lines} 本、文字 ${glyphs}）。`);
+			setStatus(`${r.name} を PNG にしました（${w}×${h}、線 ${lines} 本、文字 ${glyphs} / 出力の中身 ${describe(seen)}）。`);
 		} finally {
 			URL.revokeObjectURL(url);
 		}
@@ -722,9 +722,9 @@ $('plot2pdf').onclick = async () => {
 		if (!r) return;
 		setStatus('PDF を作っています…');
 		if (!pdfModule) pdfModule = await createPdf();
-		const { pdf, lines, glyphs } = plotToPdf(r.text, pdfModule);
+		const { pdf, lines, glyphs, seen } = plotToPdf(r.text, pdfModule);
 		offer(new Blob([pdf], { type: 'application/pdf' }), r.name + '.pdf');
-		setStatus(`${r.name} を PDF にしました（線 ${lines} 本、文字 ${glyphs}）。`);
+		setStatus(`${r.name} を PDF にしました（線 ${lines} 本、文字 ${glyphs} / 出力の中身 ${describe(seen)}）。`);
 	} catch (e) {
 		setStatus('変換できませんでした: ' + e.message, true);
 		console.error(e);

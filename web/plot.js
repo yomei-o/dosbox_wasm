@@ -78,10 +78,16 @@ export function parsePlot(text) {
 		run = null;
 	};
 
+	// What the stream actually contained, by command. When a drawing's text does
+	// not reach the output, this says whether JW_CAD never wrote it or whether
+	// the reading below dropped it.
+	const seen = {};
+
 	for (const raw of text.split(/\r?\n/)) {
 		const line = raw.trimEnd();
 		if (!line) continue;
 		const cmd = line[0];
+		seen[cmd] = (seen[cmd] || 0) + 1;
 		// Everything after the command letter; the character codes in A/N/K are
 		// the last field and may be any byte, so split off only what is needed.
 		const rest = line.slice(1).trimStart();
@@ -162,7 +168,7 @@ export function parsePlot(text) {
 		else runs.push({ ...t, endX: t.x + t.sx });
 	}
 
-	return { bounds, content, paths, arcs, points, runs, glyphs: texts.length };
+	return { bounds, content, paths, arcs, points, runs, seen, glyphs: texts.length };
 }
 
 // A margin around the drawing, in plot units (10mm).
@@ -186,6 +192,12 @@ export function pageArea({ bounds, content }) {
 	return fitArea > 0 && fitArea < sheetArea ? fitted : bounds;
 }
 
+/** The command tally as a short string, for the page's status line. */
+export function describe(seen) {
+	const order = ['M', 'D', 'C', 'P', 'A', 'N', 'K'];
+	return order.filter((c) => seen[c]).map((c) => c + seen[c]).join(' ') || '(空)';
+}
+
 export const UNITS = UNITS_PER_MM;
 export const PENS = PEN_COLOURS;
 export const DASH_PATTERNS = DASHES;
@@ -196,7 +208,7 @@ export const DASH_PATTERNS = DASHES;
  */
 export function plotToSvg(text) {
 	const parsed = parsePlot(text);
-	const { paths, arcs, points, runs, glyphs } = parsed;
+	const { paths, arcs, points, runs, glyphs, seen } = parsed;
 	const bounds = pageArea(parsed);
 	const w = bounds.maxX - bounds.minX;
 	const h = bounds.maxY - bounds.minY;
@@ -260,6 +272,7 @@ export function plotToSvg(text) {
 		svg: out.join('\n'),
 		lines: paths.reduce((a, p) => a + p.pts.length - 1, 0),
 		glyphs,
+		seen,
 	};
 }
 
@@ -275,7 +288,7 @@ export function plotToSvg(text) {
  */
 export function plotToPdf(text, mod) {
 	const parsed = parsePlot(text);
-	const { paths, arcs, points, runs, glyphs } = parsed;
+	const { paths, arcs, points, runs, glyphs, seen } = parsed;
 	const bounds = pageArea(parsed);
 	const mm = (v) => v / UNITS_PER_MM;
 	const w = bounds.maxX - bounds.minX;
@@ -330,7 +343,7 @@ export function plotToPdf(text, mod) {
 		if (len <= 0) throw new Error('PDF を書き出せませんでした');
 		const at = mod._pdf_data();
 		const pdf = mod.HEAPU8.slice(at, at + len);
-		return { pdf, lines: paths.reduce((a, p) => a + p.pts.length - 1, 0), glyphs };
+		return { pdf, lines: paths.reduce((a, p) => a + p.pts.length - 1, 0), glyphs, seen };
 	} finally {
 		mod._pdf_release();
 	}
