@@ -11,6 +11,7 @@
 // user drops in.
 
 import createLzh from './lzh.js';
+import { plotToSvg } from './plot.js';
 
 const JWCAD_LZH = '../third_party/jwcv222h.lzh';
 const WXPDOSV_LZH = '../third_party/wxpdosv4.lzh';
@@ -728,6 +729,53 @@ function imeRecall(dir) {
 	el.value = imeHistAt < 0 ? '' : imeHistory[imeHistAt];
 	el.setSelectionRange(el.value.length, el.value.length);
 }
+
+// A plot written by JW_CAD starts with the extents line our plotter definition
+// emits, which is enough to pick it out from whatever else is on C:.
+function findPlotFiles() {
+	const out = [];
+	for (const dir of [JWCAD_DIR, WORK]) {
+		let names = [];
+		try { names = FS.readdir(dir); } catch { continue; }
+		for (const name of names) {
+			if (name === '.' || name === '..') continue;
+			const path = dir + '/' + name;
+			let st;
+			try { st = FS.stat(path); } catch { continue; }
+			if (FS.isDir(st.mode) || st.size < 8 || st.size > 40 * 1024 * 1024) continue;
+			let head;
+			try { head = FS.readFile(path).subarray(0, 40); } catch { continue; }
+			if (/^B\s+-?\d/.test(new TextDecoder('latin1').decode(head))) {
+				out.push({ path, name, mtime: st.mtime ? +st.mtime : 0 });
+			}
+		}
+	}
+	return out.sort((a, b) => b.mtime - a.mtime);
+}
+
+$('plot2svg').onclick = () => {
+	if (!FS) { setStatus('起動を待ってください。', true); return; }
+	const found = findPlotFiles();
+	if (!found.length) {
+		setStatus('プロッタ出力が見つかりません。JW_CAD でプロッタ→ファイル出力してから押してください。', true);
+		return;
+	}
+	const pick = found[0];
+	try {
+		// The stream carries Shift-JIS bytes for any Japanese text in the drawing.
+		const text = new TextDecoder('shift_jis').decode(FS.readFile(pick.path));
+		const { svg, lines, glyphs } = plotToSvg(text);
+		const a = document.createElement('a');
+		a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+		a.download = pick.name.replace(/\.[^.]*$/, '') + '.svg';
+		a.click();
+		setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+		setStatus(`${pick.name} を SVG にしました（線 ${lines} 本、文字 ${glyphs}）。`);
+	} catch (e) {
+		setStatus('変換できませんでした: ' + e.message, true);
+		console.error(e);
+	}
+};
 
 $('save').onclick = async () => {
 	await persist();
