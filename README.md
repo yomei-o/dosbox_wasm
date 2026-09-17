@@ -1,10 +1,12 @@
 # dosbox_wasm — JW_CAD DOS/V in the browser
 
 [DOSBox-X](https://github.com/joncampbell123/dosbox-x) built to WebAssembly with its
-DOS/V (Japanese) emulation turned on, running **JW_CAD for DOS/V 2.22H**, with a file
-panel for moving drawings in and out.
+DOS/V (Japanese) emulation turned on, running **JW_CAD for DOS/V 2.22H**. 日本語も
+打てますし、描いた図面を **PNG / SVG / PDF** で取り出せます。
 
 👉 **https://yomei-o.github.io/dosbox_wasm/**
+
+用意するものはありません。開けば動きます。
 
 ## なぜ DOSBox-X なのか
 
@@ -19,10 +21,61 @@ JW_CAD の DOS/V 版は VGA 640×480 のグラフィックス画面に直接描�
 ```ini
 [dosbox]
 machine=svga_s3          # -V12 (VGA 640x480 16色) に必要
+dpi aware=false          # 高DPI環境でキャンバスが拡大率倍に膨れるのを防ぐ
 [dosv]
 dosv=jp                  # DOS/V エミュレーション
 fepcontrol=both          # $IAS と MS-KANJI、両方の FEP 制御 API
+[sdl]
+autolock=false           # ポインタを捕まえない（キャンバスの外に出られる）
+windowresolution=original
+showmenu=false           # DOSBox-X のメニューバーは JW_CAD のものと重なる
 ```
+
+## 日本語入力
+
+`Ctrl` + `Space` で画面のすぐ下に入力欄が開きます。**ブラウザの IME でそのまま変換**して
+`Enter` で送ると、JW_CAD の文字列入力欄に入ります。`↑` `↓` で直近20件の履歴、
+`Esc` で閉じます。
+
+DOS の FEP は使いません。DOSBox-X の DOS レイヤが `MS$KANJI` を提供していて、
+その裏をブラウザの IME が受け持つ形です。非配布物はひとつもありません。
+
+送信の実体は DOSBox-X が既に持っていた仕組みです。ホストの IME で確定した文字列を
+ゲストのコード頁に変換して BIOS キーボードバッファへ流す処理が入っているのですが、
+Win32 / X11 / macOS 用の `#if` の中にあって Emscripten ビルドからは消えています。
+そこで最後の一段だけを `dosbox_x_type_bytes` として外に出し、ページから呼んでいます
+（`scripts/patch-dosbox-x.py`）。
+
+入力欄は**画面を覆いません**。JW_CAD は上端を文字列入力欄とパラメータ行に、下端を
+ステータス行に使うので、重ねると数値が読めなくなります。
+
+## 図面の書き出し（PNG / SVG / PDF）
+
+JW_CAD のプロッタ出力を受け取って変換します。線・円弧・点のほか、SVG と PDF では
+**文字が文字のまま**入るので、検索もコピーもできます。
+
+JW_CAD 側の手順です。上部バーに `(L)` と書かれた項目は、バーではなく**作図領域を
+左クリック**して選びます。
+
+1. **入出力**（左メニュー、`q`）→ `2` プロッタ
+2. `3` ファイル出力
+3. 一覧から `WASM.JWP` を選び、もう一度クリックして確定
+4. 「出力ファイル名 ?」に名前を入れて `Enter`
+5. 設定画面 → 作図領域を左クリック（確定）
+6. 作図開始 → 作図領域を左クリック（実行）
+7. ページ上部の **PNG** / **SVG** / **PDF** を押す
+
+`WASM.JWP` はこのページが `C:\JWCAD` に入れているプロッタ設定ファイルです。実在の
+プロッタ用ではなく、変換しやすい形で書き出させるためのもの。JW_CAD のプロッタ設定
+ファイルは命令ごとの出力文字列を定義できるテンプレートなので、HP-GL を解読せずに
+済みます（`web/wasm.jwp`、書式は配布書庫の `JWP.DOC`）。
+
+用紙は**描かれた中身に合わせます**（周囲 10mm）。プロッタ設定の用紙選択に左右されません。
+
+PDF は [libharu](https://github.com/libharu/libharu) を wasm にしたものを使います
+（`web/pdf.wasm`、222KB）。日本語は PDF 標準の CJK エンコーディング `90ms-RKSJ-H` で
+出すので、**フォントを埋め込みません** — プロッタ出力の文字がシフトJISのまま渡せて、
+数MBのフォントを同梱せずに済みます。
 
 ## ファイルの出し入れ
 
@@ -35,60 +88,20 @@ fepcontrol=both          # $IAS と MS-KANJI、両方の FEP 制御 API
 
 ファイルはブラウザの中だけに置かれ、どこにも送信されません。
 
-## 日本語入力 (FEP)
-
-エー・アイ・ソフトのフリー FEP **WXP for J-3100** を使います。**WXP 本体は再配布条件により
-同梱できません**（[third_party/NOTICE.md](third_party/NOTICE.md) 参照）。
-
-1. `wxpj31.lzh` を入手する
-2. ページ上部の **FEP** 欄に放り込む（ブラウザ内に保存されます）
-3. **再起動**
-
-以後は `CONFIG.SYS` 相当の `[devices]` から読み込まれます。
-
-```ini
-[devices]
-RUN=MOUNT C /work
-DEVICE=C:\WXP\WXP.SYS /R /Z /H30 /CS /D1C:\WXP\JISHO01.DIC /D3C:\WXP\JISHO02.DIC
-DEVICE=C:\WXP\WXDP.SYS
-```
-
-`RUN=MOUNT C` が要るのは、このセクションが `[autoexec]` **より前**に走るからです。
-`mount` を `[autoexec]` に書くと、`DEVICE=` の時点で `C:` がまだ存在せず、WXP は
-黙って読み込まれません。
-
-### wxpdosv は使っていません
-
-WXP は J-3100 用なので、本来は DOS/V 機で動かすのに
-[wxpdosv](https://www.vector.co.jp/soft/dos/writing/se105856.html)
-という TSR で J-3100 固有の BIOS コールを埋める必要がありました。
-DOSBox-X ではこれが**不要どころか有害**です。
-
-| 構成 | 結果 |
-|---|---|
-| WXP のみ | 起動バナーが出て常駐。`MEM /C` が 32K → **158K** |
-| WXP + wxpdosv | WXP が辞書を読み終えた直後、ゲストがリセットベクタ (`F000:FFF0`) へ飛ぶ |
-
-DOSBox-X の DOS/V エミュレーションが、あの TSR のやっていた仕事をすでに
-済ませているためです。書庫自体は `third_party/` に残してあります
-（アセンブリソース付きで、当時どの BIOS コールを埋めていたかの資料になります）。
-
-### 起動キー
-
-FEP を呼び出すキーは環境で変わるので、ページ上部で選べるようにしてあります。
-**かな漢字 ON/OFF** ボタンがそのキーをエミュレータへ直接送るので、ブラウザや OS に
-<kbd>Alt</kbd> を横取りされる環境でも届きます。JW_CAD は左 <kbd>Alt</kbd> を
-<kbd>GRPH</kbd> として使うので、そこは避けてください。
-
 ## ビルド
 
 autotools と Emscripten が要ります。Windows なら WSL を使ってください
 （MSYS2 / Git Bash では emcc のパス変換が通りません）。
 
 ```sh
-scripts/build-wasm.sh          # dosbox-x.wasm と lzh.wasm の両方
+scripts/build-wasm.sh          # 全部
 scripts/build-wasm.sh lzh      # lzh.wasm だけ
+scripts/build-wasm.sh pdf      # pdf.wasm だけ
+scripts/build-wasm.sh dosbox   # dosbox-x.wasm だけ
 ```
+
+ビルド元のコミットはスクリプトの先頭で固定しています。配信しているバイナリが
+どのソースから作られたかを特定できるようにするためで、「その時点の最新」は取りません。
 
 成果物は `web/` に置かれ、そのままコミットされています。GitHub Pages はリポジトリの
 ルートをそのまま配信するので、CI を通さなくても更新できます。
@@ -96,15 +109,24 @@ scripts/build-wasm.sh lzh      # lzh.wasm だけ
 | 出力 | 中身 |
 |---|---|
 | `web/dosbox-x.js` / `.wasm` | DOSBox-X 本体。ASYNCIFY 有効、SDL2、出力は software surface |
-| `web/lzh.js` / `.wasm` | [lhasa](https://github.com/fragglet/lhasa) の LZH 展開。`-lh1-`（WXP が使用）と `-lh5-` に対応 |
+| `web/lzh.js` / `.wasm` | [lhasa](https://github.com/fragglet/lhasa) の LZH 展開 |
+| `web/pdf.js` / `.wasm` | [libharu](https://github.com/libharu/libharu)。PDF 書き出し |
 
 `.lzh` をブラウザ側で展開しているのは、JW_CAD の配布条件（無改変・必須ファイル一式で
-配布）を、配布書庫をそのまま置くことで素直に満たすためです。同じ経路がユーザーの
-持ち込む FEP 書庫にも使えます。
+配布）を、配布書庫をそのまま置くことで素直に満たすためです。
+
+`web/index.html` はスクリプトを `jwcad.js?v=<commit>` として読みます。HTML とスクリプトは
+別ファイルでキャッシュの寿命も別なので、片方だけ古い状態を防ぐためです。**`web/` を
+触ったらこのスタンプも更新してください。**
 
 ## ライセンス
 
-このリポジトリ自身のコード（`web/index.html`、`web/jwcad.js`、`src/lzhwasm/`、
-`scripts/`）は MIT です。同梱している第三者の著作物とビルドに使うソフトウェアの
-条件は [third_party/NOTICE.md](third_party/NOTICE.md) にまとめてあります。
-DOSBox-X が GPL-2.0 なので、配信している `dosbox-x.wasm` は GPL-2.0 で配布されます。
+このリポジトリ自身のコード（`web/index.html`、`web/jwcad.js`、`web/plot.js`、
+`web/zip.js`、`src/`、`scripts/`）は MIT です。同梱している第三者の著作物とビルドに
+使うソフトウェアの条件は [third_party/NOTICE.md](third_party/NOTICE.md) に
+まとめてあります。
+
+DOSBox-X が GPL-2.0 なので、配信している `web/dosbox-x.wasm` も GPL-2.0 で配布されます。
+対応するソースはコミット `145d6a1` にこのリポジトリの `scripts/patch-dosbox-x.py` を
+適用したものです。libharu は zlib 系で、ビルド元の書庫を
+`third_party/libharu-3467749.zip` として同梱しています。
