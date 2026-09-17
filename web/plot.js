@@ -144,11 +144,21 @@ export function parsePlot(text) {
 		} else if (cmd === 'A' || cmd === 'N' || cmd === 'K') {
 			// x y size_x size_y angle <char...> - the character is the remainder,
 			// so take five numbers off the front and keep the rest verbatim.
+			//
+			// The position is in plot units, but the two sizes are in
+			// millimetres: they are what a plotter's own character-size
+			// command takes, scaled by the knj_x/knj_y factors the .JWP sets
+			// (ours are 1, so they arrive as millimetres). Convert them here
+			// so that everything downstream is in one unit.
 			const m = rest.match(/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s?(.*)$/);
 			if (!m) continue;
 			const [, x, y, sx, sy, ang, ch] = m;
 			if (!ch) continue;
-			texts.push({ pen, x: n(x), y: n(y), sx: n(sx), sy: n(sy), ang: n(ang), ch });
+			texts.push({
+				pen, x: n(x), y: n(y),
+				sx: n(sx) * UNITS_PER_MM, sy: n(sy) * UNITS_PER_MM,
+				ang: n(ang), ch,
+			});
 		}
 	}
 	closeRun();
