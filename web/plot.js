@@ -134,6 +134,20 @@ export function parsePlot(text) {
 
 	if (!bounds) bounds = { minX: 0, minY: 0, maxX: 42050, maxY: 29700, paper: '' };
 
+	// What was actually drawn, as opposed to the sheet it was sent to.
+	let cminX = Infinity, cminY = Infinity, cmaxX = -Infinity, cmaxY = -Infinity;
+	const see = (x, y) => {
+		if (x < cminX) cminX = x;
+		if (y < cminY) cminY = y;
+		if (x > cmaxX) cmaxX = x;
+		if (y > cmaxY) cmaxY = y;
+	};
+	for (const path of paths) for (const [x, y] of path.pts) see(x, y);
+	for (const a of arcs) { see(a.cx - a.r, a.cy - a.r); see(a.cx + a.r, a.cy + a.r); }
+	for (const pt of points) see(pt.x, pt.y);
+	for (const t of texts) { see(t.x, t.y - t.sy * 0.3); see(t.x + t.sx, t.y + t.sy); }
+	const content = cminX <= cmaxX ? { minX: cminX, minY: cminY, maxX: cmaxX, maxY: cmaxY } : null;
+
 	// One character at a time is what the plotter emits; join the ones that sit
 	// on the same baseline at the same size, so the PDF carries words rather
 	// than a scatter of letters.
@@ -148,7 +162,28 @@ export function parsePlot(text) {
 		else runs.push({ ...t, endX: t.x + t.sx });
 	}
 
-	return { bounds, paths, arcs, points, runs, glyphs: texts.length };
+	return { bounds, content, paths, arcs, points, runs, glyphs: texts.length };
+}
+
+// A margin around the drawing, in plot units (10mm).
+const MARGIN = 10 * UNITS_PER_MM;
+
+/**
+ * The area to put on the page. The declared sheet comes from whichever paper
+ * the plotter settings were on, which need not be the drawing's, so fall back
+ * to what was drawn - with a margin - whenever that is the smaller of the two.
+ */
+export function pageArea({ bounds, content }) {
+	if (!content) return bounds;
+	const fitted = {
+		minX: content.minX - MARGIN,
+		minY: content.minY - MARGIN,
+		maxX: content.maxX + MARGIN,
+		maxY: content.maxY + MARGIN,
+	};
+	const sheetArea = (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY);
+	const fitArea = (fitted.maxX - fitted.minX) * (fitted.maxY - fitted.minY);
+	return fitArea > 0 && fitArea < sheetArea ? fitted : bounds;
 }
 
 export const UNITS = UNITS_PER_MM;
@@ -160,7 +195,9 @@ export const DASH_PATTERNS = DASHES;
  * @returns {{svg: string, lines: number, glyphs: number}}
  */
 export function plotToSvg(text) {
-	const { bounds, paths, arcs, points, runs, glyphs } = parsePlot(text);
+	const parsed = parsePlot(text);
+	const { paths, arcs, points, runs, glyphs } = parsed;
+	const bounds = pageArea(parsed);
 	const w = bounds.maxX - bounds.minX;
 	const h = bounds.maxY - bounds.minY;
 
@@ -237,7 +274,9 @@ export function plotToSvg(text) {
  * @returns {{pdf: Uint8Array, lines: number, glyphs: number}}
  */
 export function plotToPdf(text, mod) {
-	const { bounds, paths, arcs, points, runs, glyphs } = parsePlot(text);
+	const parsed = parsePlot(text);
+	const { paths, arcs, points, runs, glyphs } = parsed;
+	const bounds = pageArea(parsed);
 	const mm = (v) => v / UNITS_PER_MM;
 	const w = bounds.maxX - bounds.minX;
 	const h = bounds.maxY - bounds.minY;
