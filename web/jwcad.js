@@ -14,13 +14,17 @@ import createLzh from './lzh.js';
 
 const JWCAD_LZH = '../third_party/jwcv222h.lzh';
 const WXPDOSV_LZH = '../third_party/wxpdosv4.lzh';
+const PLOT_JWP = './wasm.jwp';
 
 const WORK = '/work';
 const JWCAD_DIR = WORK + '/JWCAD';
 const WXP_DIR = WORK + '/WXP';
 const STAMP = WORK + '/INSTALL.VER';
+// Where the printer port is captured. It sits on C: so the file panel
+// shows it, and the page can pick it up and convert it.
+const PLOT_OUT = WORK + '/PLOT.PRN';
 // Bump when the contents of third_party/ change, to reinstall over an old C:.
-const INSTALL_VERSION = 'jwcv222h+wxpdosv4-1';
+const INSTALL_VERSION = 'jwcv222h+wxpdosv4+plot-1';
 
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
@@ -247,6 +251,12 @@ floppy drive data rate limit=0
 [keyboard]
 auxdevice=intellimouse
 
+# JW_CAD sends a plot to the printer port. Catch it in a file instead: the
+# timeout closes the file after a quiet spell, which is the signal that the
+# plot has finished.
+[parallel]
+parallel1=file file:${PLOT_OUT} timeout:2000
+
 ${devices}[autoexec]
 @echo off
 ${mount}c:
@@ -271,6 +281,10 @@ async function install(pendingArchives) {
 		// dropping wxpj31.lzh is the only thing the user has to do.
 		const dosv = await unpack(await fetchArchive(WXPDOSV_LZH));
 		writeFiles(WXP_DIR, dosv);
+		// Our own plotter definition, so a plot comes out as something the page
+		// can turn into SVG or PDF.
+		const jwp = await fetch(PLOT_JWP);
+		if (jwp.ok) FS.writeFile(JWCAD_DIR + '/WASM.JWP', new Uint8Array(await jwp.arrayBuffer()));
 		FS.writeFile(STAMP, INSTALL_VERSION);
 		dirty = true;
 	}

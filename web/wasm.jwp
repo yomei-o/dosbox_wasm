@@ -1,0 +1,79 @@
+WASM output for SVG/PDF - dosbox_wasm
+'
+' Written for dosbox_wasm; not part of the JW_CAD distribution. It does not
+' drive a real plotter. It makes JW_CAD emit a plain stream that the page turns
+' into SVG or PDF.
+'
+' Kept to plain ASCII on purpose: DOS reads this as Shift-JIS, and the first
+' line is shown in JW_CAD's file picker.
+'
+' One command per line, first character is the command. Character codes are
+' always last on the line - ANK is 0x21-0x7f and a Shift-JIS trail byte is
+' never a newline, so the stream stays line-oriented.
+'
+'   B  bounds   min_x min_y max_x max_y paper
+'   W  pen      1-6
+'   Y  linetype 1-8
+'   M  move     x y
+'   D  draw     x y
+'   C  arc      cx cy radius start_angle end_angle
+'   P  point    x y
+'   A  ascii    x y size_x size_y angle <char>
+'   N  kana     x y size_x size_y angle <char>
+'   K  kanji    x y size_x size_y angle <shift-jis lead><trail>
+'   E  end      min_x min_y max_x max_y
+'
+INIT2 =B [1] [2] [3] [4] [5%s]\n
+'
+' Output units per millimetre.
+unit_x=100
+unit_y=100
+'
+' Paper sizes, as half-extents in those units: A1 is 841x594mm.
+PS_NAME =A1,A2,A3,A4
+P_SIZE  =a1,a2,a3,a4
+min_x =-42050,-29700,-21000,-14850
+min_y =-29700,-21000,-14850,-10500
+max_x = 42050, 29700, 21000, 14850
+max_y = 29700, 21000, 14850, 10500
+'
+' Pen number carries the colour, line type the dashes.
+PEN_1 =W 1\n
+PEN_2 =W 2\n
+PEN_3 =W 3\n
+PEN_4 =W 4\n
+PEN_5 =W 5\n
+PEN_6 =W 6\n
+LTYP_1 =Y 1\n
+LTYP_2 =Y 2\n
+LTYP_3 =Y 3\n
+LTYP_4 =Y 4\n
+LTYP_5 =Y 5\n
+LTYP_6 =Y 6\n
+LTYP_7 =Y 7\n
+LTYP_8 =Y 8\n
+pich_2 =0.5
+pich_3 =1
+pich_4 =1
+pich_5 =1
+pich_6 =2
+pich_7 =1
+pich_8 =2
+'
+MOVE  =M [1] [2]\n
+DRAW  =D [1] [2]\n
+CIRCLE=C [1] [2] [3] [4%f] [5%f]\n
+POINT =P [1] [2]\n
+'
+' Text comes through as a position and a character code, so the PDF can carry
+' real text that can be searched and copied.
+ank_x  =0.5
+ank_y  =1.0
+knj_x  =1.0
+knj_y  =1.0
+ang_r=1
+ANK   =A [1] [2] [3%f] [4%f] [9%f] [A%c]\n
+KANA  =N [1] [2] [3%f] [4%f] [9%f] [A%c]\n
+KANJI =K [1] [2] [3%f] [4%f] [9%f] [C%c][D%c]\n
+'
+TERM  =E [1] [2] [3] [4]\n
