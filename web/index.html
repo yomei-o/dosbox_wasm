@@ -120,6 +120,9 @@ td.actions { white-space: nowrap; text-align: right; }
 td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 .notes { max-width: 900px; color: var(--dim); font-size: 13px; }
 .notes h2 { font-size: 13px; color: var(--fg); margin: 18px 0 6px; }
+.notes h3 { font-size: 13px; color: var(--accent); margin: 14px 0 4px; font-weight: 600; }
+.notes ol { margin: 4px 0 8px; padding-left: 1.4em; }
+.notes li { margin: 2px 0; }
 .notes table { border-collapse: collapse; }
 .notes td { padding: 1px 14px 1px 0; vertical-align: top; }
 .notes kbd {
@@ -243,7 +246,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			<code>dosbox_x_type_bytes</code> として外に出し、ページから呼んでいます。
 		</p>
 
-		<h2>図面を SVG で取り出す</h2>
+		<h2>図面を PNG / SVG / PDF で取り出す</h2>
 		<p>
 			JW_CAD のプロッタ出力を受け取って <strong>PNG</strong> / <strong>SVG</strong> /
 			<strong>PDF</strong> に変換します。線・円弧・点のほか、SVG と PDF では
@@ -252,18 +255,46 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			大きくすると読みやすくなりますが、書き出しに時間がかかります。
 		</p>
 		<p>
-			JW_CAD 側の手順です。上部のバーに <code>(L)</code> と書かれている項目は、
-			バーではなく<strong>作図領域を左クリック</strong>して選びます。
+			JW_CAD 側の手順です。<strong>いちばんつまずくところを先に書きます。</strong>
+			上部のバーに <code>(L)</code> <code>(R)</code> と書かれている項目は、
+			<strong>バーではなく作図領域（黒いところ）を左／右クリック</strong>して選びます。
+			数字キーでは選べません。
 		</p>
+
+		<h3>プリンタポート経由（おすすめ）</h3>
+		<p>ファイル名を聞かれないぶん手数が少なくて済みます。</p>
 		<ol>
 			<li><strong>入出力</strong>（左メニュー、<kbd>q</kbd>）→ <kbd>2</kbd> プロッタ</li>
+			<li>上部に <code>2)プリンタポート出力(R)</code> と出るので、
+				<strong>作図領域を右クリック</strong></li>
+			<li>一覧から <code>WASM.JWP</code> を選び、もう一度クリックして確定</li>
+			<li>設定画面（<code>1)確定(L)</code>）→ <strong>作図領域を左クリック</strong></li>
+			<li>作図開始（<code>1) 実行(L)</code>）→ <strong>作図領域を左クリック</strong></li>
+			<li>上の <strong>PNG</strong> / <strong>SVG</strong> / <strong>PDF</strong> を押す</li>
+		</ol>
+		<p>
+			出力は <code>C:\PLOT.PRN</code> に固定です。下のファイル一覧に現れていれば
+			成功しています。
+		</p>
+
+		<h3>ファイル出力</h3>
+		<p>出力ごとに名前を付けられるので、複数の図面を区別したいときはこちら。</p>
+		<ol>
+			<li><strong>入出力</strong>（<kbd>q</kbd>）→ <kbd>2</kbd> プロッタ</li>
 			<li><kbd>3</kbd> ファイル出力</li>
 			<li>一覧から <code>WASM.JWP</code> を選び、もう一度クリックして確定</li>
 			<li>「出力ファイル名 ?」に名前を入れて <kbd>Enter</kbd></li>
-			<li>設定画面 → 作図領域を左クリック（確定）</li>
-			<li>作図開始 → 作図領域を左クリック（実行）</li>
+			<li>設定画面 → <strong>作図領域を左クリック</strong>（確定）</li>
+			<li>作図開始 → <strong>作図領域を左クリック</strong>（実行）</li>
 			<li>上の <strong>PNG</strong> / <strong>SVG</strong> / <strong>PDF</strong> を押す</li>
 		</ol>
+		<p>
+			どちらで出しても、変換ボタンは <code>C:</code> にある<strong>いちばん新しい
+			プロッタ出力</strong>を拾います。うまくいかないときは、変換後の状態表示に
+			出る「出力の中身」を見てください。<code>M</code> 移動 / <code>D</code> 線 /
+			<code>C</code> 円弧 / <code>A</code> 半角 / <code>K</code> 全角 の件数です。
+			ここが空なら、手順のどこかで出力されていません。
+		</p>
 		<p>
 			<code>WASM.JWP</code> はこのページが用意しているプロッタ設定ファイルです。
 			実在のプロッタ用ではなく、変換しやすい形で書き出させるためのものです。
@@ -288,7 +319,7 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 <!-- The query string is what makes a browser fetch the new script: the page
      and the script are separate files, and without it one can stay cached
      while the other updates, which fails as a missing element. -->
-<script type="module" src="jwcad.js?v=d1296df-sjis"></script>
+<script type="module" src="jwcad.js?v=5c796e5-steps"></script>
 
 </body>
 </html>
