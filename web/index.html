@@ -96,6 +96,17 @@ canvas {
 	height: auto;
 	image-rendering: pixelated;
 	outline: none;
+	/* The guest draws its own pointer - JW_CAD's crosshair - so the host one on
+	   top of it means two cursors for one mouse. DOSBox-X does hide the host
+	   pointer while the DOS side is using the mouse, but it decides that from
+	   HandleMouseMotion, and SDL's Emscripten backend carries the decision out by
+	   writing style.cursor on the canvas - so anything it reads as "the guest is
+	   not drawing a cursor", such as the DOS prompt between programs, writes the
+	   host pointer straight back. Settle it here instead: an !important
+	   declaration outranks the inline style SDL writes, so the pointer stays off
+	   over the screen whatever SDL sets. It is back as soon as it leaves the
+	   canvas, which is all the rest of the page needs. */
+	cursor: none !important;
 }
 #status { min-height: 1.6em; color: var(--dim); font-variant-numeric: tabular-nums; }
 #status.err { color: #ff8a8a; }
@@ -209,6 +220,8 @@ td.actions button { margin-left: 4px; padding: 2px 7px; font-size: 12px; }
 			マウスは<strong>掴みません</strong>。カーソルはそのままポインタに追従するので、
 			画面と上の入力欄を自由に行き来できます。
 			<strong>右クリックもそのまま JW_CAD に渡ります</strong>（ブラウザのメニューは出ません）。
+			画面の上ではブラウザのポインタを隠しています。出ているのは JW_CAD 自身が
+			描いているカーソルだけです。画面から外に出せばポインタは戻ります。
 		</p>
 
 		<h2>キー操作</h2>
